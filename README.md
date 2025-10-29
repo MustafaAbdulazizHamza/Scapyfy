@@ -57,6 +57,13 @@ You can optionally enable **HTTPS/TLS** by passing the paths to your digital cer
     ```bash
     sudo bash execute.sh <ssl_certfile_path> <ssl_keyfile_path>
     ```
+## ⚡ Active vs. Passive Crafting
+
+Scapyfy offers two distinct modes for packet crafting:
+
+* **Active Crafting:** This is a full-cycle, interactive process. The LLM crafts the necessary packets, and the Scapyfy agent **sends them over the wire**. After the interaction, the agent analyzes the results (e.g., received packets, timeouts) and provides you with a **detailed report of its findings**.
+
+* **Passive Crafting:** This is a "generation-only" mode. The LLM crafts the suitable packet(s) based on your prompt, but **they are not sent**. Instead, the agent returns the complete packet structure to you as a **JSON object**. This is useful for learning, reviewing packet structures, or using the data in other tools.
 ## 📝 Notes
 
 1.  **API Documentation:** The full API documentation is available at the `/docs` endpoint after execution.
