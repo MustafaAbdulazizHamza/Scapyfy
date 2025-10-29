@@ -12,6 +12,7 @@ To run Scapyfy, you will need the following:
 1.  A **Linux machine** (desktop, server, etc.).
 2.  **Superuser privileges** (`sudo`).
 3.  **Python 3**.
+4.  An **OpenAI API Key** to utilize the **AI functionalities**.
 
 ---
 
