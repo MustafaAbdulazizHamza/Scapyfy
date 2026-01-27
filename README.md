@@ -1,70 +1,114 @@
-# 🧙‍♂️ Scapyfy
-**Scapyfy** is a secure **LLM agent** that performs packet crafting tasks on your behalf. The agent utilizes **OpenAI services** for intelligent decision-making and operates behind an **API** secured with **JWT** authentication.
+# Scapyfy v2.0.0
 
-The name is a portmanteau of the popular packet crafting tool, **Scapy**, and the suffix **-fy**, which evokes a sense of **Harry Potter** magic.
+![Alt text](https://github.com/MustafaAbdulazizHamza/Scapyfy/blob/main/scapyfy.png)
+---
+**Scapyfy** is an AI-powered network security toolkit that combines LLM intelligence with powerful packet crafting capabilities. It provides both an **LLM agent** for automated network analysis and **direct tool access** for manual operations. The platform supports **multiple LLM providers** (OpenAI, Google Gemini, Anthropic Claude, Ollama), features a modern **web interface**, and exposes a **REST API** secured with **JWT authentication** and **TLS** support.
 
 ---
 
-## 🛠️ Requirements
+## Features
+
+### Multi-LLM Support
+- **OpenAI** (GPT-3.5, GPT-4)
+- **Google Gemini** (Gemini 1.5 Flash/Pro)
+- **Anthropic Claude** (Claude 3.5 Sonnet)
+- **Ollama** (Local)
+
+### Network Tools
+- **Packet Crafting** (Scapy) - Custom TCP/IP/UDP/ICMP packets
+- **Nmap Scanner** - Port scanning, service detection, OS fingerprinting
+- **Traceroute** - Network path discovery
+- **Ping** - Host reachability testing
+- **Hping3** - Advanced packet probing
+- **Port Scanner** - Fast Scapy-based scanning
+- **ARP Scanner** - Local network discovery
+
+## Requirements
 
 To run Scapyfy, you will need the following:
 
-1.  A **Linux machine** (desktop, server, etc.).
-2.  **Superuser privileges** (`sudo`).
-3.  **Python 3**.
-4.  An **OpenAI API Key** to utilize the **AI functionalities**.
+1. A **Linux machine** (desktop, server, etc.)
+2. **Superuser privileges** (`sudo`) for packet crafting
+3. **Python 3.10+**
+4. At least one **LLM API Key** (OpenAI, Google, or Anthropic) OR a running **Ollama** instance
 
----
+### System Dependencies
+```bash
+# For Nmap scanning
+sudo apt install nmap
 
-## 🚀 Installation
+# For Hping3 
+sudo apt install hping3
+
+# For traceroute
+sudo apt install traceroute
+```
+
+
+## Installation
 
 Follow these steps to get Scapyfy set up:
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/MustafaAbdulazizHamza/Scapyfy.git](https://github.com/MustafaAbdulazizHamza/Scapyfy.git)
-    cd Scapyfy
-    ```
-2.  **Install dependencies in a virtual environment:**
-    * Create a virtual environment named `scapyfy-env` and activate it.
-    * Install the required Python packages.
-    ```bash
-    python3 -m venv scapyfy-env
-    source scapyfy-env/bin/activate
-    python3 -m pip install -r requirements.txt
-    ```
-3.  **Set the API Key:**
-    * Set the environment variable `OPENAI_API_KEY` to your OpenAI access key.
-    * **Recommendation:** Use a `.env` file to securely store this secret:
-    ```bash
-    # .env file content
-    OPENAI_API_KEY=<YOUR API KEY>
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/MustafaAbdulazizHamza/Scapyfy.git
+   cd Scapyfy
+   ```
 
----
+2. **Create and activate virtual environment:**
+   ```bash
+   python3 -m venv env
+   source env/bin/activate
+   ```
 
-## 🏃 Execution
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-To run Scapyfy, simply execute the `execute.sh` script. Since packet crafting requires low-level access, the script must be run with **superuser privileges**.
+4. **Configure environment variables:**
+   Create a `.env` file based on the configuration specified in `env.example` file. 
 
-You can optionally enable **HTTPS/TLS** by passing the paths to your digital certificates as command-line interface (CLI) parameters.
 
-* **Execution without TLS:**
-    ```bash
-    sudo bash execute.sh
-    ```
-* **Execution with TLS:**
-    ```bash
-    sudo bash execute.sh <ssl_certfile_path> <ssl_keyfile_path>
-    ```
-## ⚡ Active vs. Passive Crafting
+## Execution
 
-Scapyfy offers two distinct modes for packet crafting:
+Since packet crafting requires low-level access, run with **superuser privileges**:
 
-* **Active Crafting:** This is a full-cycle, interactive process. The LLM crafts the necessary packets, and the Scapyfy agent **sends them over the wire**. After the interaction, the agent analyzes the results (e.g., received packets, timeouts) and provides you with a **detailed report of its findings**.
+### Without TLS
+```bash
+sudo bash execute.sh
+```
 
-* **Passive Crafting:** This is a "generation-only" mode. The LLM crafts the suitable packet(s) based on your prompt, but **they are not sent**. Instead, the agent returns the complete packet structure to you as a **JSON object**. This is useful for learning, reviewing packet structures, or using the data in other tools.
-## 📝 Notes
+### With TLS
+```bash
+# Using your own certificates
+sudo bash execute.sh --ssl-cert /path/to/server.crt --ssl-key /path/to/server.key
+```
 
-1.  **API Documentation:** The full API documentation is available at the `/docs` endpoint after execution.
-2.  **CLI Tool:** To interact with Scapyfy from your terminal, you can use the dedicated command-line tool, **Scapyfy-CLI**, available [here](https://github.com/MustafaAbdulazizHamza/Scapyfy-CLI).
+##  Available Network Tools
+
+| Tool | Description |
+|------|-------------|
+| `send_packet` | Send crafted Scapy packets |
+| `craft_packet_json` | Generate packet structure without sending |
+| `ping_host` | ICMP ping for connectivity testing |
+| `traceroute_host` | Discover network path to target |
+| `nmap_scan` | Comprehensive NMAP scanning |
+| `hping3_probe` | Advanced packet probing with hping3 |
+| `quick_port_scan` | Fast Scapy-based port scan |
+| `arp_scan` | Discover hosts on local network |
+
+
+## Notes
+
+1. **API Documentation**: Available at `/docs` (Swagger UI) and `/redoc` (ReDoc) after starting the server
+2. **Logs**: Execution logs are stored in `./logs/scapyfy_executions.log`
+3. **Security**: Always change the generated root password, set a strong `SECRET_KEY`, and run the server on a dedicated virtual machine in production.
+
+
+
+## Disclaimer
+
+- This project is designed for **educational purposes** and authorized security testing only.
+
+- **Always ensure you have proper authorization before performing network scans or packet injection.**
