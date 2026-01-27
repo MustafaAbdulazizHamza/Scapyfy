@@ -85,20 +85,6 @@ sudo bash execute.sh
 sudo bash execute.sh --ssl-cert /path/to/server.crt --ssl-key /path/to/server.key
 ```
 
-##  Available Network Tools
-
-| Tool | Description |
-|------|-------------|
-| `send_packet` | Send crafted Scapy packets |
-| `craft_packet_json` | Generate packet structure without sending |
-| `ping_host` | ICMP ping for connectivity testing |
-| `traceroute_host` | Discover network path to target |
-| `nmap_scan` | Comprehensive NMAP scanning |
-| `hping3_probe` | Advanced packet probing with hping3 |
-| `quick_port_scan` | Fast Scapy-based port scan |
-| `arp_scan` | Discover hosts on local network |
-
-
 ## Notes
 
 1. **API Documentation**: Available at `/docs` (Swagger UI) and `/redoc` (ReDoc) after starting the server
