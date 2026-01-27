@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 from hashing import verify_password
 from jwt_handler import create_access_token
 from oauth2 import get_current_active_user
+from logger import get_logger
 import schemas
 
 router = APIRouter(
@@ -12,9 +13,10 @@ router = APIRouter(
     tags=["authentication"]
 )
 
+logger = get_logger()
+
 
 def authenticate_user(username: str, password: str, db: Session):
-    """Authenticate user by username and password"""
     user = db.query(User).filter(User.username == username).first()
 
     if not user:
@@ -30,8 +32,9 @@ def authenticate_user(username: str, password: str, db: Session):
 
 
 @router.post("/login", response_model=schemas.Token)
-def login(user_credentials: schemas.UserLogin, db: Session = Depends(get_db)):
-    """Login endpoint"""
+def login(user_credentials: schemas.UserLogin, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.client.host if request.client else "unknown"
+    
     user = authenticate_user(
         username=user_credentials.username,
         password=user_credentials.password,
@@ -39,6 +42,13 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     )
 
     if not user:
+        logger.log_auth_event(
+            event="LOGIN",
+            user=user_credentials.username,
+            success=False,
+            client_ip=client_ip,
+            details="Invalid credentials"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -47,6 +57,13 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(get_db)):
 
     access_token = create_access_token(
         data={"sub": str(user.id), "username": user.username}
+    )
+    
+    logger.log_auth_event(
+        event="LOGIN",
+        user=user.username,
+        success=True,
+        client_ip=client_ip
     )
 
     return {

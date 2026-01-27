@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Scapyfy - AI-Powered Network Packet Crafting Agent">
+    <meta name="theme-color" content="#0f0f23">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Scapyfy - AI Packet Crafter</title>
+    <link rel="icon" type="image/png" href="/assets/favicon.png">
+    <link rel="apple-touch-icon" href="/assets/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-logo">🧙‍♂️</div>
+            <h1>Scapyfy</h1>
+            <div class="loading-spinner"></div>
+            <p>Initializing AI Agent...</p>
+        </div>
+    </div>
+    <div id="login-page" class="page hidden">
+        <div class="auth-container">
+            <div class="auth-card glass-card">
+                <div class="auth-header">
+                    <div class="auth-logo">🧙‍♂️</div>
+                    <h1>Scapyfy</h1>
+                    <p class="auth-subtitle">AI-Powered Packet Crafter</p>
+                </div>
+                <form id="login-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            <input type="text" id="login-username" placeholder="Enter your username" required
+                                autocomplete="username">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <input type="password" id="login-password" placeholder="Enter your password" required
+                                autocomplete="current-password">
+                            <button type="button" class="toggle-password" tabindex="-1">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">
+                        <span>Sign In</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </form>
+                <div class="auth-error hidden" id="login-error">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    <span id="login-error-text">Invalid credentials</span>
+                </div>
+                <div class="auth-footer">
+                    <p>Secure packet crafting with AI</p>
+                </div>
+            </div>
+            <div class="auth-bg-effects">
+                <div class="floating-orb orb-1"></div>
+                <div class="floating-orb orb-2"></div>
+                <div class="floating-orb orb-3"></div>
+            </div>
+        </div>
+    </div>
+    <div id="main-app" class="page hidden">
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🧙‍♂️</span>
+                    <span class="logo-text">Scapyfy</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-view="chat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>Chat</span>
+                </button>
+                <button class="nav-item" data-view="history">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>History</span>
+                </button>
+                <button class="nav-item" data-view="tools">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                    </svg>
+                    <span>Tools</span>
+                </button>
+                <button class="nav-item admin-only hidden" data-view="admin">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <span>Admin</span>
+                </button>
+            </nav>
+            <div class="sidebar-section">
+                <h3 class="section-title">LLM Provider</h3>
+                <div class="provider-selector">
+                    <select id="llm-provider" class="provider-select">
+                        <option value="auto">Auto (Best Available)</option>
+                        <option value="openai">OpenAI GPT</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="claude">Anthropic Claude</option>
+                        <option value="ollama">Ollama (Local)</option>
+                    </select>
+                    <div class="provider-status">
+                        <span class="status-dot"></span>
+                        <span id="provider-status-text">Checking...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="user-profile-btn">
+                    <div class="user-avatar">
+                        <span id="user-initial">U</span>
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name" id="user-display-name">User</span>
+                        <span class="user-role" id="user-role">User</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                    </svg>
+                </div>
+            </div>
+        </aside>
+        <main class="main-content">
+            <div id="chat-view" class="view active">
+                <div class="chat-container">
+                    <div class="chat-header">
+                        <button class="mobile-menu-btn" id="mobile-menu-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="3" y1="12" x2="21" y2="12" />
+                                <line x1="3" y1="6" x2="21" y2="6" />
+                                <line x1="3" y1="18" x2="21" y2="18" />
+                            </svg>
+                        </button>
+                        <div class="chat-title">
+                            <h2>Packet Crafter</h2>
+                            <span class="chat-subtitle">AI-powered network analysis</span>
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="welcome-message">
+                            <div class="welcome-icon">🧙‍♂️</div>
+                            <h3>Welcome to Scapyfy</h3>
+                            <p>I'm your AI-powered packet crafting assistant. I can help you with:</p>
+                            <div class="capabilities-grid">
+                                <div class="capability-card">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                    </svg>
+                                    <span>Packet Crafting</span>
+                                </div>
+                                <div class="capability-card">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="2" y1="12" x2="22" y2="12" />
+                                        <path
+                                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                    </svg>
+                                    <span>Network Scanning</span>
+                                </div>
+                                <div class="capability-card">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                                    </svg>
+                                    <span>Traceroute</span>
+                                </div>
+                                <div class="capability-card">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                                        <line x1="8" y1="21" x2="16" y2="21" />
+                                        <line x1="12" y1="17" x2="12" y2="21" />
+                                    </svg>
+                                    <span>Port Scanning</span>
+                                </div>
+                            </div>
+                            <p class="welcome-hint">Try asking: "Scan ports 22, 80, and 443 on 192.168.1.1"</p>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <div class="chat-input-wrapper">
+                            <textarea id="chat-input" placeholder="Describe your packet crafting task..."
+                                rows="1"></textarea>
+                            <div class="chat-input-actions">
+                                <div class="iteration-control">
+                                    <label for="max-iterations">Iterations:</label>
+                                    <input type="number" id="max-iterations" value="10" min="1" max="50">
+                                </div>
+                                <button type="button" class="btn btn-primary btn-send" id="send-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="22" y1="2" x2="11" y2="13" />
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="chat-disclaimer">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="16" x2="12" y2="12" />
+                                <line x1="12" y1="8" x2="12.01" y2="8" />
+                            </svg>
+                            <span>Ensure you have authorization before scanning networks</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div id="history-view" class="view">
+                <div class="view-header">
+                    <div>
+                        <h2>Session History</h2>
+                        <p>View your past crafting sessions</p>
+                    </div>
+                    <button class="btn btn-danger" id="clear-history-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        <span>Clear All</span>
+                    </button>
+                </div>
+                <div class="history-list" id="history-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <h3>No history yet</h3>
+                        <p>Your packet crafting sessions will appear here</p>
+                    </div>
+                </div>
+            </div>
+            <div id="tools-view" class="view">
+                <div class="view-header">
+                    <h2>Direct Tools</h2>
+                    <p>Execute network tools directly without LLM processing</p>
+                </div>
+                <div class="tools-content">
+                    <div class="tool-selector-container">
+                        <label for="tool-select">Select Tool:</label>
+                        <select id="tool-select" class="tool-select">
+                            <option value="">-- Choose a tool --</option>
+                        </select>
+                    </div>
+                    <div id="tool-form-container" class="tool-form-container hidden">
+                        <div class="tool-info-header">
+                            <h3 id="tool-form-title">Tool Name</h3>
+                            <p id="tool-form-description">Tool description</p>
+                        </div>
+                        <div class="tool-docs-panel" id="tool-docs-panel">
+                            <div class="tool-docs-toggle">
+                                <button type="button" class="btn btn-ghost btn-sm" id="toggle-docs-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                    </svg>
+                                    <span>Show Documentation</span>
+                                </button>
+                            </div>
+                            <div class="tool-docs-content hidden" id="tool-docs-content">
+                            </div>
+                        </div>
+                        <form id="tool-execute-form" class="tool-execute-form">
+                        <div id="tool-params-container" class="tool-params-container">
+                        </div>
+                        <div class="tool-form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                <span>Execute Tool</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="tool-clear-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                </svg>
+                                <span>Clear</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div id="tool-output-container" class="tool-output-container hidden">
+                    <div class="tool-output-header">
+                        <h4>Output</h4>
+                        <button type="button" class="btn btn-ghost btn-sm" id="copy-output-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                            </svg>
+                            Copy
+                        </button>
+                    </div>
+                    <pre id="tool-output" class="tool-output"></pre>
+                </div>
+                <div class="tools-reference">
+                    <h4>Available Tools</h4>
+                    <div class="tools-grid" id="tools-grid">
+                        <div class="tool-card" data-tool="ping_host">
+                            <div class="tool-icon">📡</div>
+                            <h3>Ping</h3>
+                            <p>Test host reachability with ICMP echo</p>
+                        </div>
+                        <div class="tool-card" data-tool="nmap_scan">
+                            <div class="tool-icon">🔍</div>
+                            <h3>Nmap Scanner</h3>
+                            <p>Port scanning, service detection, OS fingerprinting</p>
+                        </div>
+                        <div class="tool-card" data-tool="traceroute_host">
+                            <div class="tool-icon">🌐</div>
+                            <h3>Traceroute</h3>
+                            <p>Discover network path to target hosts</p>
+                        </div>
+                        <div class="tool-card" data-tool="hping3_probe">
+                            <div class="tool-icon">⚡</div>
+                            <h3>Hping3</h3>
+                            <p>Advanced packet probing and testing</p>
+                        </div>
+                        <div class="tool-card" data-tool="quick_port_scan">
+                            <div class="tool-icon">🚪</div>
+                            <h3>Port Scanner</h3>
+                            <p>Fast Scapy-based TCP port scanning</p>
+                        </div>
+                        <div class="tool-card" data-tool="arp_scan">
+                            <div class="tool-icon">📋</div>
+                            <h3>ARP Scanner</h3>
+                            <p>Discover hosts on local network</p>
+                        </div>
+                        <div class="tool-card" data-tool="send_packet">
+                            <div class="tool-icon">📦</div>
+                            <h3>Send Packet</h3>
+                            <p>Create and send custom packets with Scapy</p>
+                        </div>
+                        <div class="tool-card" data-tool="dns_lookup_tool">
+                            <div class="tool-icon">🔎</div>
+                            <h3>DNS Lookup</h3>
+                            <p>Query DNS records (A, MX, NS, TXT, etc.)</p>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+            <div id="admin-view" class="view">
+                <div class="view-header">
+                    <h2>User Management</h2>
+                    <p>Manage user accounts and permissions</p>
+                </div>
+                <div class="admin-content">
+                    <div class="admin-section glass-card">
+                        <div class="admin-section-header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                    <circle cx="8.5" cy="7" r="4" />
+                                    <line x1="20" y1="8" x2="20" y2="14" />
+                                    <line x1="23" y1="11" x2="17" y2="11" />
+                                </svg>
+                                Create New User
+                            </h3>
+                            <button type="button" class="btn btn-ghost btn-sm" id="toggle-create-form">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form id="create-user-form" class="create-user-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="new-username">Username</label>
+                                    <input type="text" id="new-username" placeholder="Enter username" required minlength="3">
+                                </div>
+                                <div class="form-group">
+                                    <label for="new-email">Email</label>
+                                    <input type="email" id="new-email" placeholder="user@example.com" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="new-user-password">Password</label>
+                                    <input type="password" id="new-user-password" placeholder="Min 8 characters" required minlength="8">
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirm-new-user-password">Confirm Password</label>
+                                    <input type="password" id="confirm-new-user-password" placeholder="Confirm password" required minlength="8">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="8.5" cy="7" r="4" />
+                                        <line x1="20" y1="8" x2="20" y2="14" />
+                                        <line x1="23" y1="11" x2="17" y2="11" />
+                                    </svg>
+                                    Create User
+                                </button>
+                                <button type="reset" class="btn btn-secondary">Clear</button>
+                            </div>
+                            <div class="form-message hidden" id="create-user-message"></div>
+                        </form>
+                    </div>
+                    <div class="admin-section glass-card">
+                        <div class="admin-section-header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                                User Accounts
+                            </h3>
+                            <button type="button" class="btn btn-ghost btn-sm" id="refresh-users-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10" />
+                                    <polyline points="1 20 1 14 7 14" />
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <div class="users-table-container">
+                            <table class="users-table" id="users-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                    <tr class="loading-row">
+                                        <td colspan="6">
+                                            <div class="table-loading">
+                                                <div class="loading-spinner small"></div>
+                                                <span>Loading users...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-overlay" id="change-user-password-modal">
+                <div class="modal glass-card">
+                    <div class="modal-header">
+                        <h2>Change User Password</h2>
+                        <button class="modal-close" id="close-change-password-modal">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="modal-user-info">Changing password for: <strong id="change-password-username">-</strong></p>
+                        <form id="admin-change-password-form">
+                            <input type="hidden" id="change-password-user-id">
+                            <div class="form-group">
+                                <label for="admin-new-password">New Password</label>
+                                <input type="password" id="admin-new-password" placeholder="Min 8 characters" required minlength="8">
+                            </div>
+                            <div class="form-group">
+                                <label for="admin-confirm-password">Confirm Password</label>
+                                <input type="password" id="admin-confirm-password" placeholder="Confirm password" required minlength="8">
+                            </div>
+                            <div class="form-message hidden" id="admin-password-message"></div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancel-change-password">Cancel</button>
+                        <button type="submit" form="admin-change-password-form" class="btn btn-primary">Change Password</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-overlay" id="delete-user-modal">
+                <div class="modal glass-card">
+                    <div class="modal-header">
+                        <h2>Delete User</h2>
+                        <button class="modal-close" id="close-delete-modal">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="delete-warning">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                            <p>Are you sure you want to delete user <strong id="delete-username">-</strong>?</p>
+                            <p class="warning-text">This action cannot be undone.</p>
+                        </div>
+                        <input type="hidden" id="delete-user-id">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancel-delete">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="confirm-delete">Delete User</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div class="modal-overlay" id="profile-modal">
+            <div class="modal glass-card">
+                <div class="modal-header">
+                    <h2>Profile Settings</h2>
+                    <button class="modal-close" id="close-profile-modal">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="profile-section">
+                        <div class="profile-avatar-large">
+                            <span id="modal-user-initial">U</span>
+                        </div>
+                        <div class="profile-info">
+                            <h3 id="modal-username">Username</h3>
+                            <p id="modal-email">user@email.com</p>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h4>Change Password</h4>
+                        <form id="change-password-form">
+                            <div class="form-group">
+                                <label for="current-password">Current Password</label>
+                                <input type="password" id="current-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-password">New Password</label>
+                                <input type="password" id="new-password" required minlength="8">
+                            </div>
+                            <div class="form-group">
+                                <label for="confirm-password">Confirm New Password</label>
+                                <input type="password" id="confirm-password" required minlength="8">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Update Password</button>
+                        </form>
+                        <div class="form-message hidden" id="password-message"></div>
+                    </div>
+                    <div class="settings-section">
+                        <h4>Session Info</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">User ID</span>
+                                <span class="info-value" id="modal-user-id">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Status</span>
+                                <span class="info-value status-active" id="modal-status">Active</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" id="logout-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                        <span>Sign Out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container"></div>
+    <script src="app.js"></script>
+</body>
+</html>
