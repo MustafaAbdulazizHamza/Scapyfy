@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,6 +18,7 @@
         rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <div id="loading-screen" class="loading-screen">
         <div class="loading-content">
@@ -91,6 +93,67 @@
             </div>
         </div>
     </div>
+    <div id="setup-page" class="page hidden">
+        <div class="auth-container">
+            <div class="auth-card glass-card">
+                <div class="auth-header">
+                    <div class="auth-logo">🧙‍♂️</div>
+                    <h1>Scapyfy</h1>
+                    <p class="auth-subtitle">Initial Setup</p>
+                </div>
+                <div class="setup-intro" style="text-align: center; margin-bottom: 20px; color: var(--text-secondary);">
+                    <p>Welcome to Scapyfy! Please configure your root account to secure your installation.</p>
+                </div>
+                <form id="setup-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="setup-email">Root Email</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                <polyline points="22,6 12,13 2,6" />
+                            </svg>
+                            <input type="email" id="setup-email" placeholder="root@example.com" required
+                                autocomplete="email">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="setup-password">Root Password</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <input type="password" id="setup-password" placeholder="Min 8 characters" required
+                                minlength="8" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="setup-confirm">Confirm Password</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <input type="password" id="setup-confirm" placeholder="Confirm password" required
+                                minlength="8" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="form-message hidden" id="setup-message"></div>
+                    <button type="submit" class="btn btn-primary btn-full">
+                        Create Root Account
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width: 16px; height: 16px; margin-left: 8px;">
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                            <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
     <div id="main-app" class="page hidden">
         <div class="sidebar-overlay" id="sidebar-overlay"></div>
         <aside class="sidebar" id="sidebar">
@@ -149,6 +212,69 @@
                     <div class="provider-status">
                         <span class="status-dot"></span>
                         <span id="provider-status-text">Checking...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3 class="section-title">
+                    AI Assistant
+                    <button class="help-btn" id="ai-assistant-help-btn" type="button"
+                        aria-label="What is AI Assistant?">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                    </button>
+                </h3>
+                <div class="assistant-toggle-container">
+                    <label class="assistant-toggle-switch" for="ai-assistant-enabled">
+                        <input type="checkbox" id="ai-assistant-enabled">
+                        <span class="toggle-slider">
+                            <span class="toggle-icon off">💤</span>
+                            <span class="toggle-icon on">🧙‍♂️</span>
+                        </span>
+                    </label>
+                    <div class="assistant-toggle-info">
+                        <span class="toggle-label" id="ai-assistant-label">Disabled</span>
+                    </div>
+                </div>
+                <!-- Help Popover -->
+                <div class="help-popover hidden" id="ai-assistant-help-popover">
+                    <div class="help-popover-arrow"></div>
+                    <div class="help-popover-header">
+                        <span class="help-popover-icon">🧙‍♂️</span>
+                        <h4>AI Assistant</h4>
+                        <button class="help-popover-close" id="ai-assistant-help-close" type="button">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="help-popover-content">
+                        <p>Get AI help understanding the results of tools you run manually from the
+                            <strong>Tools</strong> page.
+                        </p>
+                        <div class="help-features">
+                            <div class="help-feature">
+                                <span class="feature-icon">🔧</span>
+                                <span>Records tools you run from the Tools page</span>
+                            </div>
+                            <div class="help-feature">
+                                <span class="feature-icon">💬</span>
+                                <span>Ask questions about results in plain language</span>
+                            </div>
+                            <div class="help-feature">
+                                <span class="feature-icon">🔗</span>
+                                <span>Connects findings across your tool executions</span>
+                            </div>
+                            <div class="help-feature">
+                                <span class="feature-icon">🧠</span>
+                                <span>Remembers your conversation for follow-ups</span>
+                            </div>
+                        </div>
+                        <p class="help-note">Only applies to manual tool executions, not Chat agent actions.</p>
                     </div>
                 </div>
             </div>
@@ -298,9 +424,9 @@
                             <div class="tool-docs-toggle">
                                 <button type="button" class="btn btn-ghost btn-sm" id="toggle-docs-btn">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
                                     </svg>
                                     <span>Show Documentation</span>
                                 </button>
@@ -309,82 +435,85 @@
                             </div>
                         </div>
                         <form id="tool-execute-form" class="tool-execute-form">
-                        <div id="tool-params-container" class="tool-params-container">
-                        </div>
-                        <div class="tool-form-actions">
-                            <button type="submit" class="btn btn-primary">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polygon points="5 3 19 12 5 21 5 3" />
-                                </svg>
-                                <span>Execute Tool</span>
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="tool-clear-btn">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                                </svg>
-                                <span>Clear</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                <div id="tool-output-container" class="tool-output-container hidden">
-                    <div class="tool-output-header">
-                        <h4>Output</h4>
-                        <button type="button" class="btn btn-ghost btn-sm" id="copy-output-btn">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                            </svg>
-                            Copy
-                        </button>
+                            <div id="tool-params-container" class="tool-params-container">
+                            </div>
+                            <div class="tool-form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="5 3 19 12 5 21 5 3" />
+                                    </svg>
+                                    <span>Execute Tool</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="tool-clear-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path
+                                            d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                    </svg>
+                                    <span>Clear</span>
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    <pre id="tool-output" class="tool-output"></pre>
-                </div>
-                <div class="tools-reference">
-                    <h4>Available Tools</h4>
-                    <div class="tools-grid" id="tools-grid">
-                        <div class="tool-card" data-tool="ping_host">
-                            <div class="tool-icon">📡</div>
-                            <h3>Ping</h3>
-                            <p>Test host reachability with ICMP echo</p>
+                    <div id="tool-output-container" class="tool-output-container hidden">
+                        <div class="tool-output-header">
+                            <h4>Output</h4>
+                            <div class="tool-output-actions">
+                                <button type="button" class="btn btn-ghost btn-sm" id="copy-output-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                    </svg>
+                                    Copy
+                                </button>
+                            </div>
                         </div>
-                        <div class="tool-card" data-tool="nmap_scan">
-                            <div class="tool-icon">🔍</div>
-                            <h3>Nmap Scanner</h3>
-                            <p>Port scanning, service detection, OS fingerprinting</p>
-                        </div>
-                        <div class="tool-card" data-tool="traceroute_host">
-                            <div class="tool-icon">🌐</div>
-                            <h3>Traceroute</h3>
-                            <p>Discover network path to target hosts</p>
-                        </div>
-                        <div class="tool-card" data-tool="hping3_probe">
-                            <div class="tool-icon">⚡</div>
-                            <h3>Hping3</h3>
-                            <p>Advanced packet probing and testing</p>
-                        </div>
-                        <div class="tool-card" data-tool="quick_port_scan">
-                            <div class="tool-icon">🚪</div>
-                            <h3>Port Scanner</h3>
-                            <p>Fast Scapy-based TCP port scanning</p>
-                        </div>
-                        <div class="tool-card" data-tool="arp_scan">
-                            <div class="tool-icon">📋</div>
-                            <h3>ARP Scanner</h3>
-                            <p>Discover hosts on local network</p>
-                        </div>
-                        <div class="tool-card" data-tool="send_packet">
-                            <div class="tool-icon">📦</div>
-                            <h3>Send Packet</h3>
-                            <p>Create and send custom packets with Scapy</p>
-                        </div>
-                        <div class="tool-card" data-tool="dns_lookup_tool">
-                            <div class="tool-icon">🔎</div>
-                            <h3>DNS Lookup</h3>
-                            <p>Query DNS records (A, MX, NS, TXT, etc.)</p>
+                        <div id="tool-output" class="tool-output"></div>
+                    </div>
+                    <div class="tools-reference">
+                        <h4>Available Tools</h4>
+                        <div class="tools-grid" id="tools-grid">
+                            <div class="tool-card" data-tool="ping_host">
+                                <div class="tool-icon">📡</div>
+                                <h3>Ping</h3>
+                                <p>Test host reachability with ICMP echo</p>
+                            </div>
+                            <div class="tool-card" data-tool="nmap_scan">
+                                <div class="tool-icon">🔍</div>
+                                <h3>Nmap Scanner</h3>
+                                <p>Port scanning, service detection, OS fingerprinting</p>
+                            </div>
+                            <div class="tool-card" data-tool="traceroute_host">
+                                <div class="tool-icon">🌐</div>
+                                <h3>Traceroute</h3>
+                                <p>Discover network path to target hosts</p>
+                            </div>
+                            <div class="tool-card" data-tool="hping3_probe">
+                                <div class="tool-icon">⚡</div>
+                                <h3>Hping3</h3>
+                                <p>Advanced packet probing and testing</p>
+                            </div>
+                            <div class="tool-card" data-tool="quick_port_scan">
+                                <div class="tool-icon">🚪</div>
+                                <h3>Port Scanner</h3>
+                                <p>Fast Scapy-based TCP port scanning</p>
+                            </div>
+                            <div class="tool-card" data-tool="arp_scan">
+                                <div class="tool-icon">📋</div>
+                                <h3>ARP Scanner</h3>
+                                <p>Discover hosts on local network</p>
+                            </div>
+                            <div class="tool-card" data-tool="send_packet">
+                                <div class="tool-icon">📦</div>
+                                <h3>Send Packet</h3>
+                                <p>Create and send custom packets with Scapy</p>
+                            </div>
+                            <div class="tool-card" data-tool="dns_lookup_tool">
+                                <div class="tool-icon">🔎</div>
+                                <h3>DNS Lookup</h3>
+                                <p>Query DNS records (A, MX, NS, TXT, etc.)</p>
+                            </div>
                         </div>
                     </div>
-                </div>
                 </div>
             </div>
             <div id="admin-view" class="view">
@@ -414,7 +543,8 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="new-username">Username</label>
-                                    <input type="text" id="new-username" placeholder="Enter username" required minlength="3">
+                                    <input type="text" id="new-username" placeholder="Enter username" required
+                                        minlength="3">
                                 </div>
                                 <div class="form-group">
                                     <label for="new-email">Email</label>
@@ -424,11 +554,13 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="new-user-password">Password</label>
-                                    <input type="password" id="new-user-password" placeholder="Min 8 characters" required minlength="8">
+                                    <input type="password" id="new-user-password" placeholder="Min 8 characters"
+                                        required minlength="8">
                                 </div>
                                 <div class="form-group">
                                     <label for="confirm-new-user-password">Confirm Password</label>
-                                    <input type="password" id="confirm-new-user-password" placeholder="Confirm password" required minlength="8">
+                                    <input type="password" id="confirm-new-user-password" placeholder="Confirm password"
+                                        required minlength="8">
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -505,23 +637,86 @@
                         </button>
                     </div>
                     <div class="modal-body">
-                        <p class="modal-user-info">Changing password for: <strong id="change-password-username">-</strong></p>
+                        <p class="modal-user-info">Changing password for: <strong
+                                id="change-password-username">-</strong></p>
                         <form id="admin-change-password-form">
                             <input type="hidden" id="change-password-user-id">
                             <div class="form-group">
                                 <label for="admin-new-password">New Password</label>
-                                <input type="password" id="admin-new-password" placeholder="Min 8 characters" required minlength="8">
+                                <input type="password" id="admin-new-password" placeholder="Min 8 characters" required
+                                    minlength="8">
                             </div>
                             <div class="form-group">
                                 <label for="admin-confirm-password">Confirm Password</label>
-                                <input type="password" id="admin-confirm-password" placeholder="Confirm password" required minlength="8">
+                                <input type="password" id="admin-confirm-password" placeholder="Confirm password"
+                                    required minlength="8">
                             </div>
                             <div class="form-message hidden" id="admin-password-message"></div>
                         </form>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" id="cancel-change-password">Cancel</button>
-                        <button type="submit" form="admin-change-password-form" class="btn btn-primary">Change Password</button>
+                        <button type="submit" form="admin-change-password-form" class="btn btn-primary">Change
+                            Password</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-overlay" id="edit-user-modal">
+                <div class="modal glass-card">
+                    <div class="modal-header">
+                        <h2>Edit User</h2>
+                        <button class="modal-close" id="close-edit-user-modal">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="edit-user-form">
+                            <input type="hidden" id="edit-user-id">
+                            <div class="form-group">
+                                <label for="edit-username">Username</label>
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                        <circle cx="12" cy="7" r="4" />
+                                    </svg>
+                                    <input type="text" id="edit-username" required autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-email">Email</label>
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path
+                                            d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                        <polyline points="22,6 12,13 2,6" />
+                                    </svg>
+                                    <input type="email" id="edit-email" required autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-password">New Password (Optional)</label>
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                    <input type="password" id="edit-password" placeholder="Leave blank to keep current"
+                                        minlength="8" autocomplete="new-password">
+                                </div>
+                            </div>
+                            <div class="form-message hidden" id="edit-user-message"></div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancel-edit-user">Cancel</button>
+                        <button type="submit" form="edit-user-form" class="btn btn-primary" id="save-edit-user">Save
+                            Changes</button>
                     </div>
                 </div>
             </div>
@@ -539,7 +734,8 @@
                     <div class="modal-body">
                         <div class="delete-warning">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <path
+                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                                 <line x1="12" y1="9" x2="12" y2="13" />
                                 <line x1="12" y1="17" x2="12.01" y2="17" />
                             </svg>
@@ -571,25 +767,77 @@
                         <div class="profile-avatar-large">
                             <span id="modal-user-initial">U</span>
                         </div>
-                        <div class="profile-info">
-                            <h3 id="modal-username">Username</h3>
-                            <p id="modal-email">user@email.com</p>
-                        </div>
+                        <form id="profile-update-form" class="profile-info-form" style="flex: 1;">
+                            <div class="form-group">
+                                <label for="profile-username">Username</label>
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                        <circle cx="12" cy="7" r="4" />
+                                    </svg>
+                                    <input type="text" id="profile-username" required autocomplete="username">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-email">Email</label>
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path
+                                            d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                        <polyline points="22,6 12,13 2,6" />
+                                    </svg>
+                                    <input type="email" id="profile-email" required autocomplete="email">
+                                </div>
+                            </div>
+                            <div class="form-message hidden" id="profile-update-message"></div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    style="width: 18px; height: 18px; margin-right: 8px;">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                </svg>
+                                Save Profile Info
+                            </button>
+                        </form>
                     </div>
                     <div class="settings-section">
                         <h4>Change Password</h4>
                         <form id="change-password-form">
                             <div class="form-group">
                                 <label for="current-password">Current Password</label>
-                                <input type="password" id="current-password" required>
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    <input type="password" id="current-password" required>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="new-password">New Password</label>
-                                <input type="password" id="new-password" required minlength="8">
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    <input type="password" id="new-password" required minlength="8">
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="confirm-password">Confirm New Password</label>
-                                <input type="password" id="confirm-password" required minlength="8">
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    <input type="password" id="confirm-password" required minlength="8">
+                                </div>
                             </div>
                             <button type="submit" class="btn btn-primary">Update Password</button>
                         </form>
@@ -623,6 +871,83 @@
         </div>
     </div>
     <div id="toast-container"></div>
+
+    <!-- Floating AI Assistant Chat Widget -->
+    <div id="ai-assistant-widget" class="ai-assistant-widget" style="display: none;">
+        <!-- Floating Button -->
+        <button id="ai-assistant-toggle" class="ai-assistant-toggle" title="Ask AI Assistant">
+            <span class="assistant-icon">🧙‍♂️</span>
+            <span class="assistant-badge hidden" id="assistant-badge"></span>
+        </button>
+
+        <!-- Chat Panel -->
+        <div id="ai-assistant-panel" class="ai-assistant-panel hidden">
+            <div class="assistant-header">
+                <div class="assistant-title">
+                    <span class="assistant-logo">🧙‍♂️</span>
+                    <div>
+                        <h4>Scapyfy Assistant</h4>
+                        <span class="assistant-status" id="assistant-status">Ready to help</span>
+                    </div>
+                </div>
+                <div class="assistant-actions">
+                    <button class="assistant-btn" id="clear-chat-btn" title="Clear chat">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                    </button>
+                    <button class="assistant-btn" id="expand-assistant-btn" title="Toggle Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                    </button>
+                    <button class="assistant-btn" id="close-assistant-btn" title="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="assistant-context" id="assistant-context">
+                <span class="context-label">📋 Context:</span>
+                <span class="context-value" id="context-value">No tool output yet</span>
+            </div>
+
+            <div class="assistant-messages" id="assistant-messages">
+                <div class="assistant-welcome">
+                    <div class="welcome-avatar">🧙‍♂️</div>
+                    <div class="welcome-text">
+                        <p>Hello! I'm your Scapyfy AI assistant.</p>
+                        <p>Execute a network tool and I'll help you understand the results. You can ask me about:</p>
+                        <ul>
+                            <li>What the output means</li>
+                            <li>Security implications</li>
+                            <li>Next steps to take</li>
+                            <li>Technical details of protocols</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="assistant-input-area">
+                <form id="assistant-form" class="assistant-form">
+                    <input type="text" id="assistant-input" class="assistant-input"
+                        placeholder="Ask about the tool output..." autocomplete="off">
+                    <button type="submit" class="assistant-send-btn" id="assistant-send-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
+
 </html>

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User
-from hashing import verify_password
+from hashing import verify_password, hash_password
 from jwt_handler import create_access_token
 from oauth2 import get_current_active_user
 from logger import get_logger
@@ -14,6 +14,42 @@ router = APIRouter(
 )
 
 logger = get_logger()
+
+
+@router.get("/setup-status")
+def get_setup_status(db: Session = Depends(get_db)):
+    root_user = db.query(User).filter(User.id == 0).first()
+    return {"setup_required": not root_user}
+
+
+@router.post("/setup")
+def setup_root(setup_data: schemas.SetupRequest, db: Session = Depends(get_db)):
+    root_user = db.query(User).filter(User.id == 0).first()
+    if root_user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Setup already completed"
+        )
+    
+    new_user = User(
+        id=0,
+        username="root",
+        email=setup_data.email,
+        hashed_password=hash_password(setup_data.password),
+        is_active=True
+    )
+    
+    db.add(new_user)
+    db.commit()
+    
+    logger.log_auth_event(
+        event="SETUP",
+        user="root",
+        success=True,
+        details="Root user initialized via web setup"
+    )
+    
+    return {"message": "Root user created successfully"}
 
 
 def authenticate_user(username: str, password: str, db: Session):

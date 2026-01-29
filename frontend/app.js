@@ -11,6 +11,9 @@ const AppState = {
 function getUserHistoryKey(userId) {
     return `scapyfy_history_user_${userId}`;
 }
+function getUserChatKey(userId) {
+    return `scapyfy_chat_user_${userId}`;
+}
 function isRootUser(user) {
     return user && user.id === 0 && user.username === 'root';
 }
@@ -26,6 +29,30 @@ function saveUserHistory() {
     if (AppState.user && AppState.user.id !== undefined) {
         const key = getUserHistoryKey(AppState.user.id);
         localStorage.setItem(key, JSON.stringify(AppState.sessionHistory));
+    }
+}
+function loadUserChat() {
+    if (AppState.user && AppState.user.id !== undefined) {
+        const key = getUserChatKey(AppState.user.id);
+        const savedChat = localStorage.getItem(key);
+        if (savedChat) {
+            AppState.chatHistory = JSON.parse(savedChat);
+            return true;
+        }
+    }
+    AppState.chatHistory = [];
+    return false;
+}
+function saveUserChat() {
+    if (AppState.user && AppState.user.id !== undefined) {
+        const key = getUserChatKey(AppState.user.id);
+        localStorage.setItem(key, JSON.stringify(AppState.chatHistory));
+    }
+}
+function clearUserChat() {
+    if (AppState.user && AppState.user.id !== undefined) {
+        const key = getUserChatKey(AppState.user.id);
+        localStorage.removeItem(key);
     }
 }
 const Router = {
@@ -112,8 +139,23 @@ const Api = {
         });
         return data;
     },
+    async getSetupStatus() {
+        return await this.request(`/auth/setup-status?_=${new Date().getTime()}`);
+    },
+    async setupRoot(email, password) {
+        return await this.request('/auth/setup', {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+        });
+    },
     async getCurrentUser() {
         return await this.request('/users/me');
+    },
+    async updateCurrentUser(userData) {
+        return await this.request('/users/me/update', {
+            method: 'PUT',
+            body: JSON.stringify(userData),
+        });
     },
     async changePassword(currentPassword, newPassword) {
         return await this.request('/users/change-password', {
@@ -170,6 +212,12 @@ const Api = {
             body: JSON.stringify({ new_password: newPassword }),
         });
     },
+    async adminUpdateUser(userId, userData) {
+        return await this.request(`/users/admin/update/${userId}`, {
+            method: 'PUT',
+            body: JSON.stringify(userData),
+        });
+    },
     async toggleUserActive(userId) {
         return await this.request(`/users/admin/toggle-active/${userId}`, {
             method: 'PUT',
@@ -180,10 +228,26 @@ const Api = {
             method: 'DELETE',
         });
     },
+    async explainToolOutput(toolName, parameters, result, provider = null, question = null, conversationHistory = null, allToolExecutions = null, memorySummary = null, needsSummarization = false) {
+        return await this.request('/tools/explain', {
+            method: 'POST',
+            body: JSON.stringify({
+                tool_name: toolName,
+                parameters: parameters,
+                result: result,
+                provider: provider === 'auto' ? null : provider,
+                question: question,
+                conversation_history: conversationHistory,
+                all_tool_executions: allToolExecutions,
+                memory_summary: memorySummary,
+                needs_summarization: needsSummarization,
+            }),
+        });
+    },
 };
 const UI = {
     elements: {},
-    init() {
+    async init() {
         this.elements = {
             loadingScreen: document.getElementById('loading-screen'),
             loginPage: document.getElementById('login-page'),
@@ -212,9 +276,27 @@ const UI = {
             logoutBtn: document.getElementById('logout-btn'),
             historyList: document.getElementById('history-list'),
             toastContainer: document.getElementById('toast-container'),
+            setupPage: document.getElementById('setup-page'),
         };
         this.bindEvents();
-        this.checkAuth();
+
+        try {
+            const status = await Api.getSetupStatus();
+            if (status.setup_required) {
+                setTimeout(() => {
+                    this.elements.loadingScreen.classList.add('fade-out');
+                    setTimeout(() => {
+                        this.elements.loadingScreen.classList.add('hidden');
+                        this.showSetupPage();
+                    }, 800);
+                }, 500);
+            } else {
+                this.checkAuth();
+            }
+        } catch (error) {
+            console.warn("Backend not ready or setup check failed", error);
+            this.checkAuth();
+        }
     },
     bindEvents() {
         this.elements.loginForm.addEventListener('submit', (e) => {
@@ -284,7 +366,56 @@ const UI = {
             e.preventDefault();
             Profile.changePassword();
         });
+        const profileForm = document.getElementById('profile-update-form');
+        if (profileForm) {
+            profileForm.addEventListener('submit', (e) => Profile.updateProfileInfo(e));
+        }
         this.elements.logoutBtn.addEventListener('click', () => Auth.logout());
+
+        const setupForm = document.getElementById('setup-form');
+        if (setupForm) {
+            setupForm.addEventListener('submit', (e) => this.handleSetup(e));
+        }
+    },
+    showSetupPage() {
+        this.elements.loginPage.classList.add('hidden');
+        this.elements.mainApp.classList.add('hidden');
+        this.elements.loadingScreen.classList.add('hidden');
+        const setupPage = document.getElementById('setup-page');
+        if (setupPage) setupPage.classList.remove('hidden');
+        // Hide AI Assistant widget on setup page
+        const assistantWidget = document.getElementById('ai-assistant-widget');
+        if (assistantWidget) {
+            assistantWidget.style.display = 'none';
+        }
+    },
+    async handleSetup(e) {
+        e.preventDefault();
+        const email = document.getElementById('setup-email').value;
+        const password = document.getElementById('setup-password').value;
+        const confirm = document.getElementById('setup-confirm').value;
+        const messageEl = document.getElementById('setup-message');
+        const form = document.getElementById('setup-form');
+        const submitBtn = form.querySelector('button[type="submit"]');
+
+        if (password !== confirm) {
+            this.showFormMessage(messageEl, 'Passwords do not match', 'error');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        const originalText = submitBtn.innerHTML;
+        submitBtn.textContent = 'Creating...';
+
+        try {
+            await Api.setupRoot(email, password);
+            // Immediately refresh the page after successful setup
+            window.location.reload();
+        } catch (error) {
+            this.showFormMessage(messageEl, error.message, 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
     },
     async checkAuth() {
         setTimeout(() => {
@@ -305,6 +436,11 @@ const UI = {
     showLoginPage() {
         this.elements.loginPage.classList.remove('hidden');
         this.elements.mainApp.classList.add('hidden');
+        // Hide AI Assistant widget on login page
+        const assistantWidget = document.getElementById('ai-assistant-widget');
+        if (assistantWidget) {
+            assistantWidget.style.display = 'none';
+        }
     },
     showMainApp() {
         this.elements.loginPage.classList.add('hidden');
@@ -330,6 +466,19 @@ const UI = {
         if (viewName === 'admin' && isRootUser(AppState.user)) {
             Admin.init();
             Admin.loadUsers();
+        }
+
+        // Handle AI Assistant visibility (Only in Tools)
+        const assistantWidget = document.getElementById('ai-assistant-widget');
+        if (assistantWidget) {
+            if (viewName === 'tools') {
+                assistantWidget.style.display = 'flex';
+            } else {
+                assistantWidget.style.display = 'none';
+                if (typeof AIAssistant !== 'undefined' && AIAssistant.isOpen) {
+                    AIAssistant.close();
+                }
+            }
         }
     },
     updateUserInfo() {
@@ -408,8 +557,22 @@ const UI = {
         if (!AppState.user) return;
         const initial = AppState.user.username.charAt(0).toUpperCase();
         document.getElementById('modal-user-initial').textContent = initial;
-        document.getElementById('modal-username').textContent = AppState.user.username;
-        document.getElementById('modal-email').textContent = AppState.user.email || 'Not available';
+
+        // Populate inputs
+        const uInput = document.getElementById('profile-username');
+        const eInput = document.getElementById('profile-email');
+        if (uInput) uInput.value = AppState.user.username;
+        if (eInput) eInput.value = AppState.user.email || '';
+
+        // Disable username edit for root or check logic
+        if (uInput && (AppState.user.id === 0 || AppState.user.username === 'root')) {
+            uInput.disabled = true;
+            uInput.title = "Root username cannot be changed";
+        } else if (uInput) {
+            uInput.disabled = false;
+            uInput.title = "";
+        }
+
         document.getElementById('modal-user-id').textContent = AppState.user.id;
         document.getElementById('modal-status').textContent = 'Active';
         this.elements.profileModal.classList.add('active');
@@ -527,6 +690,9 @@ const Auth = {
             } catch (e) {
             }
             loadUserHistory();
+            // Clear any old chat from DOM first, then restore user's saved chat
+            UI.elements.chatMessages.innerHTML = '';
+            Chat.restoreChat() || Chat.clear();  // Restore saved chat, or show welcome if none
             UI.showMainApp();
             UI.updateUserInfo();
             UI.updateProviderStatus();
@@ -596,9 +762,48 @@ const Profile = {
             submitBtn.textContent = 'Update Password';
         }
     },
+    async updateProfileInfo(e) {
+        e.preventDefault();
+        const username = document.getElementById('profile-username').value.trim();
+        const email = document.getElementById('profile-email').value.trim();
+        const messageEl = document.getElementById('profile-update-message');
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+
+        if (messageEl) {
+            messageEl.classList.add('hidden');
+            messageEl.className = 'form-message';
+        }
+
+        try {
+            const result = await Api.updateCurrentUser({ username, email });
+            AppState.user = result;
+            localStorage.setItem('scapyfy_user', JSON.stringify(result));
+            UI.updateUserInfo();
+
+            if (messageEl) {
+                messageEl.textContent = 'Profile updated successfully';
+                messageEl.className = 'form-message success';
+                messageEl.classList.remove('hidden');
+            }
+            UI.showToast('success', 'Profile Updated', 'Your profile info has been updated');
+        } catch (error) {
+            if (messageEl) {
+                messageEl.textContent = error.message;
+                messageEl.className = 'form-message error';
+                messageEl.classList.remove('hidden');
+            }
+            UI.showToast('error', 'Error', error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Profile Info';
+        }
+    },
 };
 const Chat = {
-    addMessage(type, content, sender = null) {
+    addMessage(type, content, sender = null, skipSave = false) {
         const welcomeMsg = UI.elements.chatMessages.querySelector('.welcome-message');
         if (welcomeMsg) welcomeMsg.remove();
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -618,6 +823,13 @@ const Chat = {
         `;
         UI.elements.chatMessages.appendChild(messageEl);
         UI.elements.chatMessages.scrollTop = UI.elements.chatMessages.scrollHeight;
+
+        // Save to chat history (unless restoring)
+        if (!skipSave) {
+            AppState.chatHistory.push({ type, content, time });
+            saveUserChat();
+        }
+
         return messageEl;
     },
     addLoadingMessage() {
@@ -724,6 +936,22 @@ const Chat = {
             </div>
         `;
         AppState.chatHistory = [];
+        clearUserChat();
+    },
+    restoreChat() {
+        // Load saved chat from localStorage
+        if (loadUserChat() && AppState.chatHistory.length > 0) {
+            // Clear the welcome message
+            const welcomeMsg = UI.elements.chatMessages.querySelector('.welcome-message');
+            if (welcomeMsg) welcomeMsg.remove();
+
+            // Restore each message (skipSave=true to avoid duplicating saves)
+            AppState.chatHistory.forEach(msg => {
+                this.addMessage(msg.type, msg.content, null, true);
+            });
+            return true;
+        }
+        return false;
     },
     saveToHistory(prompt, response) {
         const historyItem = {
@@ -752,6 +980,10 @@ const DirectTools = {
     tools: [],
     currentTool: null,
     currentExample: null,
+    lastExecutionResult: null,
+    lastExecutionParams: null,
+    isExplaining: false,
+    conversationHistory: [],  // Track Q&A for follow-up questions
     toolDisplayInfo: {
         'ping_host': {
             name: 'Ping Host',
@@ -1487,9 +1719,22 @@ const DirectTools = {
             if (result.success) {
                 output.innerHTML = this.formatToolResult(this.currentTool.name, result.result);
                 output.className = 'tool-output';
+                // Store for explanation
+                this.lastExecutionResult = result.result;
+                this.lastExecutionParams = parameters;
+                // Record in AI Assistant for context
+                if (typeof AIAssistant !== 'undefined') {
+                    AIAssistant.recordToolExecution(
+                        this.currentTool.name,
+                        parameters,
+                        result.result
+                    );
+                }
             } else {
                 output.textContent = `Error: ${result.error}`;
                 output.className = 'tool-output error';
+                this.lastExecutionResult = null;
+                this.lastExecutionParams = null;
             }
             UI.showToast(
                 result.success ? 'success' : 'error',
@@ -1499,6 +1744,8 @@ const DirectTools = {
         } catch (error) {
             output.textContent = `Error: ${error.message}`;
             output.className = 'tool-output error';
+            this.lastExecutionResult = null;
+            this.lastExecutionParams = null;
             UI.showToast('error', 'Execution Error', error.message);
         } finally {
             form.classList.remove('loading');
@@ -1630,7 +1877,22 @@ const Admin = {
         if (confirmDelete) {
             confirmDelete.addEventListener('click', () => this.confirmDeleteUser());
         }
-        document.querySelectorAll('#change-user-password-modal, #delete-user-modal').forEach(modal => {
+
+        // Edit User Modal Handlers
+        const editForm = document.getElementById('edit-user-form');
+        if (editForm) {
+            editForm.addEventListener('submit', (e) => this.updateUser(e));
+        }
+        const closeEditModal = document.getElementById('close-edit-user-modal');
+        const cancelEdit = document.getElementById('cancel-edit-user');
+        if (closeEditModal) {
+            closeEditModal.addEventListener('click', () => this.closeModal('edit-user-modal'));
+        }
+        if (cancelEdit) {
+            cancelEdit.addEventListener('click', () => this.closeModal('edit-user-modal'));
+        }
+
+        document.querySelectorAll('#change-user-password-modal, #delete-user-modal, #edit-user-modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     this.closeModal(modal.id);
@@ -1720,11 +1982,11 @@ const Admin = {
                     <td class="actions-cell">
                         <div class="action-buttons">
                             <button class="btn btn-icon btn-ghost" 
-                                    title="Change Password"
-                                    onclick="Admin.openChangePasswordModal(${user.id}, '${this.escapeHtml(user.username)}')">
+                                    title="Edit User"
+                                    onclick="Admin.openEditModal(${user.id}, '${this.escapeHtml(user.username)}', '${this.escapeHtml(user.email || '')}')">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                 </svg>
                             </button>
                             ${!isUserRoot ? `
@@ -1799,6 +2061,76 @@ const Admin = {
             `;
         }
     },
+    openEditModal(userId, username, email) {
+        document.getElementById('edit-user-id').value = userId;
+        document.getElementById('edit-username').value = username;
+        document.getElementById('edit-email').value = email;
+        document.getElementById('edit-password').value = '';
+
+        // Handle root user restriction
+        const isRoot = (userId === 0 || userId === '0' || username === 'root');
+        const usernameInput = document.getElementById('edit-username');
+        let warning = document.getElementById('edit-root-warning');
+
+        // Create warning element if it doesn't exist
+        if (!warning) {
+            warning = document.createElement('p');
+            warning.id = 'edit-root-warning';
+            warning.className = 'help-text error-text';
+            warning.textContent = 'Cannot change username of root account';
+            warning.style.fontSize = '0.8rem';
+            warning.style.marginTop = '4px';
+            usernameInput.parentNode.appendChild(warning);
+        }
+
+        if (isRoot) {
+            usernameInput.disabled = true;
+            warning.classList.remove('hidden');
+        } else {
+            usernameInput.disabled = false;
+            warning.classList.add('hidden');
+        }
+
+        this.showFormMessage(document.getElementById('edit-user-message'), '', 'hidden');
+        document.getElementById('edit-user-modal').classList.add('active');
+    },
+
+    async updateUser(e) {
+        e.preventDefault();
+
+        const messageEl = document.getElementById('edit-user-message');
+        const submitBtn = document.getElementById('save-edit-user');
+
+        const userId = document.getElementById('edit-user-id').value;
+        const username = document.getElementById('edit-username').value.trim();
+        const email = document.getElementById('edit-email').value.trim();
+        const password = document.getElementById('edit-password').value;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+        this.showFormMessage(messageEl, '', 'hidden');
+
+        try {
+            const userData = { username, email };
+            if (password) {
+                if (password.length < 8) {
+                    throw new Error("Password must be at least 8 characters");
+                }
+                userData.password = password;
+            }
+
+            await Api.adminUpdateUser(userId, userData);
+            this.closeModal('edit-user-modal');
+            await this.loadUsers();
+            UI.showToast('success', 'User Updated', 'User saved successfully');
+        } catch (error) {
+            this.showFormMessage(messageEl, error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Changes';
+        }
+    },
+
     openChangePasswordModal(userId, username) {
         document.getElementById('change-password-user-id').value = userId;
         document.getElementById('change-password-username').textContent = username;
@@ -1897,9 +2229,581 @@ const Admin = {
         return div.innerHTML;
     }
 };
+
+// ==================================
+// AI Assistant - Floating Chat Widget
+// ==================================
+const AIAssistant = {
+    isOpen: false,
+    isProcessing: false,
+    isEnabled: false,  // Whether AI Assistant is enabled
+    isExpanded: false, // Whether AI Assistant is in full screen mode
+    messages: [],  // Full conversation history
+    recentMessages: [],  // Messages sent to API (after summarization)
+    memorySummary: null,  // LLM-generated summary of older messages
+    toolExecutions: [],  // All tool executions in session
+    currentContext: null,  // Currently focused tool
+    MESSAGE_LIMIT: 10,  // Messages before triggering summarization
+
+    init() {
+        this.loadState();
+        this.bindEvents();
+        this.updateUI();
+    },
+
+    // Load enabled state from localStorage
+    loadState() {
+        const saved = localStorage.getItem('scapyfy_ai_assistant_enabled');
+        this.isEnabled = saved === 'true';
+    },
+
+    // Save enabled state to localStorage
+    saveState() {
+        localStorage.setItem('scapyfy_ai_assistant_enabled', this.isEnabled.toString());
+    },
+
+    // Enable or disable the assistant
+    setEnabled(enabled) {
+        this.isEnabled = enabled;
+        this.saveState();
+        this.updateUI();
+
+        if (enabled) {
+            UI.showToast('success', 'AI Assistant Enabled', 'Tool outputs will be recorded for context');
+        } else {
+            UI.showToast('info', 'AI Assistant Disabled', 'Tool outputs will not be recorded');
+            this.close();
+        }
+    },
+
+    // Update UI based on enabled state
+    updateUI() {
+        const widget = document.getElementById('ai-assistant-widget');
+        const checkbox = document.getElementById('ai-assistant-enabled');
+        const label = document.getElementById('ai-assistant-label');
+
+        if (widget) {
+            if (this.isEnabled) {
+                widget.classList.remove('disabled');
+            } else {
+                widget.classList.add('disabled');
+            }
+        }
+
+        if (checkbox) {
+            checkbox.checked = this.isEnabled;
+        }
+
+        if (label) {
+            label.textContent = this.isEnabled ? 'Enabled' : 'Disabled';
+            label.classList.toggle('enabled', this.isEnabled);
+        }
+
+        this.updateContextDisplay();
+    },
+
+    bindEvents() {
+        // Enable/Disable toggle in sidebar
+        const enableCheckbox = document.getElementById('ai-assistant-enabled');
+        if (enableCheckbox) {
+            enableCheckbox.addEventListener('change', (e) => {
+                this.setEnabled(e.target.checked);
+            });
+        }
+
+        // Help button and popover
+        const helpBtn = document.getElementById('ai-assistant-help-btn');
+        const helpPopover = document.getElementById('ai-assistant-help-popover');
+        const helpClose = document.getElementById('ai-assistant-help-close');
+
+        if (helpBtn && helpPopover) {
+            helpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                helpPopover.classList.toggle('hidden');
+            });
+        }
+
+        if (helpClose && helpPopover) {
+            helpClose.addEventListener('click', () => {
+                helpPopover.classList.add('hidden');
+            });
+        }
+
+        // Close popover when clicking outside
+        document.addEventListener('click', (e) => {
+            if (helpPopover && !helpPopover.classList.contains('hidden')) {
+                if (!helpPopover.contains(e.target) && e.target !== helpBtn) {
+                    helpPopover.classList.add('hidden');
+                }
+            }
+        });
+
+        // Toggle button (floating widget)
+        const toggleBtn = document.getElementById('ai-assistant-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => this.toggle());
+        }
+
+        // Expand button
+        const expandBtn = document.getElementById('expand-assistant-btn');
+        if (expandBtn) {
+            expandBtn.addEventListener('click', () => this.toggleExpanded());
+        }
+
+        // Close button
+        const closeBtn = document.getElementById('close-assistant-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.close());
+        }
+
+        // Clear chat button
+        const clearBtn = document.getElementById('clear-chat-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearChat());
+        }
+
+        // Form submission
+        const form = document.getElementById('assistant-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.sendMessage();
+            });
+        }
+
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            const widget = document.getElementById('ai-assistant-widget');
+            if (this.isOpen && widget && !widget.contains(e.target)) {
+                this.close();
+            }
+        });
+    },
+
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    },
+
+    toggleExpanded() {
+        this.isExpanded = !this.isExpanded;
+        const panel = document.getElementById('ai-assistant-panel');
+        const btnFn = document.getElementById('expand-assistant-btn');
+        if (!panel || !btnFn) return;
+
+        const svg = btnFn.querySelector('svg');
+
+        if (this.isExpanded) {
+            panel.classList.add('expanded');
+            btnFn.title = "Exit Fullscreen";
+            if (svg) svg.innerHTML = '<path d="M4 14h6v6M10 4H4v6M14 10h6V4M20 14v6h-6" />';
+        } else {
+            panel.classList.remove('expanded');
+            btnFn.title = "Toggle Fullscreen";
+            if (svg) svg.innerHTML = '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />';
+        }
+
+        setTimeout(() => {
+            const msgs = document.getElementById('assistant-messages');
+            if (msgs) msgs.scrollTop = msgs.scrollHeight;
+        }, 100);
+    },
+
+    open() {
+        const panel = document.getElementById('ai-assistant-panel');
+        if (panel) {
+            panel.classList.remove('hidden');
+            this.isOpen = true;
+            this.hideBadge();
+            const input = document.getElementById('assistant-input');
+            if (input) input.focus();
+        }
+    },
+
+    close() {
+        const panel = document.getElementById('ai-assistant-panel');
+        if (panel) {
+            panel.classList.add('hidden');
+            this.isOpen = false;
+        }
+    },
+
+    // Called when a tool is executed - stores the execution for context
+    recordToolExecution(toolName, parameters, result) {
+        // Only record if AI Assistant is enabled
+        if (!this.isEnabled) {
+            return;
+        }
+
+        const execution = {
+            timestamp: new Date().toISOString(),
+            tool: toolName,
+            tool_name: toolName,  // For API compatibility
+            parameters: parameters,
+            result: result,
+            id: Date.now()
+        };
+
+        this.toolExecutions.push(execution);
+        this.currentContext = execution;
+
+        // Keep only last 10 executions
+        if (this.toolExecutions.length > 10) {
+            this.toolExecutions.shift();
+        }
+
+        // Add a context marker to the conversation
+        this.messages.push({
+            role: 'system',
+            type: 'tool_switch',
+            content: `🔧 Tool executed: ${DirectTools.getDisplayName(toolName)}`,
+            tool: toolName,
+            timestamp: execution.timestamp
+        });
+
+        this.updateContextDisplay();
+        this.showNewContextBadge();
+    },
+
+    updateContextDisplay() {
+        const contextValue = document.getElementById('context-value');
+        if (!contextValue) return;
+
+        if (this.toolExecutions.length > 0) {
+            const current = DirectTools.getDisplayName(this.currentContext.tool);
+            const count = this.toolExecutions.length;
+            contextValue.textContent = `${current} (${count} tool${count > 1 ? 's' : ''} in session)`;
+            contextValue.classList.add('has-context');
+        } else {
+            contextValue.textContent = 'No tool output yet';
+            contextValue.classList.remove('has-context');
+        }
+    },
+
+    showNewContextBadge() {
+        const badge = document.getElementById('assistant-badge');
+        if (badge && !this.isOpen) {
+            badge.textContent = this.toolExecutions.length;
+            badge.classList.remove('hidden');
+        }
+    },
+
+    hideBadge() {
+        const badge = document.getElementById('assistant-badge');
+        if (badge) {
+            badge.classList.add('hidden');
+        }
+    },
+
+    clearChat() {
+        this.messages = [];
+        this.recentMessages = [];
+        this.memorySummary = null;
+        this.renderMessages();
+        UI.showToast('info', 'Chat Cleared', 'Conversation history cleared (tool history preserved)');
+    },
+
+    // Get messages for API (excluding system/tool_switch markers)
+    getApiMessages() {
+        return this.messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map(m => ({ role: m.role, content: m.content }));
+    },
+
+    // Check if summarization is needed
+    async checkAndSummarize() {
+        const apiMessages = this.getApiMessages();
+
+        if (apiMessages.length >= this.MESSAGE_LIMIT) {
+            this.setStatus('Summarizing memory...');
+
+            try {
+                const response = await Api.explainToolOutput(
+                    this.currentContext.tool,
+                    this.currentContext.parameters,
+                    this.currentContext.result,
+                    AppState.provider,
+                    null,
+                    apiMessages,
+                    this.getToolExecutionsForApi(),
+                    this.memorySummary,
+                    true  // needs_summarization = true
+                );
+
+                if (response.success && response.summary) {
+                    this.memorySummary = response.summary;
+
+                    // Keep only recent messages
+                    const userAssistantMessages = this.messages.filter(
+                        m => m.role === 'user' || m.role === 'assistant'
+                    );
+                    const lastFourMessages = userAssistantMessages.slice(-4);
+
+                    // Rebuild messages keeping tool markers and last 4 user/assistant messages
+                    const toolMarkers = this.messages.filter(m => m.type === 'tool_switch');
+                    this.messages = [...toolMarkers.slice(-3), ...lastFourMessages];
+
+                    console.log(`Summarized ${response.messages_summarized} messages`);
+                }
+            } catch (error) {
+                console.warn('Failed to summarize conversation:', error);
+            }
+        }
+    },
+
+    // Format tool executions for API
+    getToolExecutionsForApi() {
+        return this.toolExecutions.map(exec => ({
+            tool_name: exec.tool,
+            parameters: exec.parameters,
+            result: exec.result,
+            timestamp: exec.timestamp
+        }));
+    },
+
+    async sendMessage() {
+        const input = document.getElementById('assistant-input');
+        const sendBtn = document.getElementById('assistant-send-btn');
+
+        if (!input || this.isProcessing) return;
+
+        const question = input.value.trim();
+        if (!question) return;
+
+        // Check if we have any context
+        if (!this.currentContext) {
+            UI.showToast('warning', 'No Context', 'Execute a tool first to get results to ask about');
+            return;
+        }
+
+        // Add user message
+        this.messages.push({
+            role: 'user',
+            content: question,
+            timestamp: new Date().toISOString()
+        });
+
+        // Clear input
+        input.value = '';
+
+        // Show messages with typing indicator
+        this.renderMessages(true);
+
+        // Disable input
+        this.isProcessing = true;
+        input.disabled = true;
+        sendBtn.disabled = true;
+
+        // Update status
+        this.setStatus('Thinking...');
+
+        try {
+            // Check if we need to summarize first
+            await this.checkAndSummarize();
+
+            // Build conversation history for API (recent messages only)
+            const conversationHistory = this.getApiMessages().slice(0, -1);  // Exclude current question
+
+            const response = await Api.explainToolOutput(
+                this.currentContext.tool,
+                this.currentContext.parameters,
+                this.currentContext.result,
+                AppState.provider,
+                question,
+                conversationHistory,
+                this.getToolExecutionsForApi(),
+                this.memorySummary,
+                false
+            );
+
+            if (response.success && response.explanation) {
+                this.messages.push({
+                    role: 'assistant',
+                    content: response.explanation,
+                    timestamp: new Date().toISOString()
+                });
+                this.setStatus('Ready to help');
+            } else {
+                this.messages.push({
+                    role: 'assistant',
+                    content: 'Sorry, I encountered an error generating a response. Please try again.',
+                    timestamp: new Date().toISOString()
+                });
+                this.setStatus('Error occurred');
+            }
+        } catch (error) {
+            console.error('AI Assistant error:', error);
+            this.messages.push({
+                role: 'assistant',
+                content: `Error: ${error.message}. Make sure an LLM provider is configured in the settings.`,
+                timestamp: new Date().toISOString()
+            });
+            this.setStatus('Error occurred');
+        } finally {
+            this.isProcessing = false;
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+            this.renderMessages();
+            this.setStatus('Ready to help');
+        }
+    },
+
+    setStatus(status) {
+        const statusEl = document.getElementById('assistant-status');
+        if (statusEl) {
+            statusEl.textContent = status;
+        }
+    },
+
+    renderMessages(showTyping = false) {
+        const container = document.getElementById('assistant-messages');
+        if (!container) return;
+
+        // Hide badge when viewing
+        this.hideBadge();
+
+        if (this.messages.length === 0) {
+            // Show welcome message
+            container.innerHTML = `
+                <div class="assistant-welcome">
+                    <div class="welcome-avatar">🧙‍♂️</div>
+                    <div class="welcome-text">
+                        <p>Hello! I'm your Scapyfy AI assistant.</p>
+                        <p>Execute a network tool and I'll help you understand the results. You can ask me about:</p>
+                        <ul>
+                            <li>What the output means</li>
+                            <li>Security implications</li>
+                            <li>Next steps to take</li>
+                            <li>Technical details of protocols</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+
+        // Show memory summary indicator if summarization has occurred
+        if (this.memorySummary) {
+            html += `
+                <div class="memory-summary-indicator">
+                    <span class="memory-icon">🧠</span>
+                    <span>Earlier conversation summarized for efficiency</span>
+                </div>
+            `;
+        }
+
+        this.messages.forEach(msg => {
+            if (msg.type === 'tool_switch') {
+                // Tool execution marker
+                html += `
+                    <div class="tool-switch-marker">
+                        <span class="marker-line"></span>
+                        <span class="marker-text">${msg.content}</span>
+                        <span class="marker-line"></span>
+                    </div>
+                `;
+            } else if (msg.role === 'user') {
+                html += `
+                    <div class="chat-message user">
+                        <div class="msg-avatar">👤</div>
+                        <div class="msg-content">${this.escapeHtml(msg.content)}</div>
+                    </div>
+                `;
+            } else if (msg.role === 'assistant') {
+                html += `
+                    <div class="chat-message ai">
+                        <div class="msg-avatar">🧙‍♂️</div>
+                        <div class="msg-content">${this.formatMarkdown(msg.content)}</div>
+                    </div>
+                `;
+            }
+        });
+
+        // Add typing indicator
+        if (showTyping) {
+            html += `
+                <div class="chat-message ai">
+                    <div class="msg-avatar">🧙‍♂️</div>
+                    <div class="msg-content">
+                        <div class="typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+
+        // Scroll to bottom
+        container.scrollTop = container.scrollHeight;
+    },
+
+    formatMarkdown(text) {
+        if (!text) return '';
+
+        let html = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // Code blocks
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+            return `<pre><code>${code.trim()}</code></pre>`;
+        });
+
+        // Inline code
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Headers
+        html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+        html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+
+        // Bold and italic
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+        // Lists
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+
+        // Wrap consecutive li elements in ul
+        html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+        html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+        // Paragraphs
+        html = html.replace(/\n\n+/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+
+        // Clean up
+        html = html.replace(/<p><\/p>/g, '');
+        html = html.replace(/<p>(\s*<[hul])/g, '$1');
+        html = html.replace(/(<\/[hul][^>]*>)\s*<\/p>/g, '$1');
+        html = html.replace(/\n/g, '<br>');
+
+        return html;
+    },
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     UI.init();
+    AIAssistant.init();
 });
 window.Chat = Chat;
 window.DirectTools = DirectTools;
 window.Admin = Admin;
+window.AIAssistant = AIAssistant;

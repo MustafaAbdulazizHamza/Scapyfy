@@ -84,6 +84,54 @@ def admin_change_password(
     return {"message": f"Password changed for user {target_user.username}"}
 
 
+@router.put("/admin/update/{user_id}", response_model=schemas.UserResponse)
+def admin_update_user(
+        user_id: int,
+        user_data: schemas.UserUpdate,
+        db: Session = Depends(get_db),
+        admin_user: User = Depends(require_admin_user)
+):
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check for username change conflict
+    if user_data.username is not None and user_data.username != target_user.username:
+        if user_id == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change root username"
+            )
+        
+        # Check uniqueness
+        if db.query(User).filter(User.username == user_data.username).first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already registered"
+            )
+        target_user.username = user_data.username
+
+    # Check for email change conflict
+    if user_data.email is not None and user_data.email != target_user.email:
+        if db.query(User).filter(User.email == user_data.email).first():
+             raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered"
+            )
+        target_user.email = user_data.email
+
+    # Check for password change
+    if user_data.password is not None:
+        target_user.hashed_password = hash_password(user_data.password)
+
+    db.commit()
+    db.refresh(target_user)
+    return target_user
+
+
 @router.put("/admin/toggle-active/{user_id}")
 def admin_toggle_user_active(
         user_id: int,
@@ -139,6 +187,41 @@ def admin_delete_user(
 
 @router.get("/me", response_model=schemas.UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_active_user)):
+    return current_user
+
+
+@router.put("/me/update", response_model=schemas.UserResponse)
+def update_current_user(
+        user_data: schemas.UserUpdate,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    # Check for username change conflict
+    if user_data.username is not None and user_data.username != current_user.username:
+        if current_user.id == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change root username"
+            )
+        
+        if db.query(User).filter(User.username == user_data.username).first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already registered"
+            )
+        current_user.username = user_data.username
+
+    # Check for email change conflict
+    if user_data.email is not None and user_data.email != current_user.email:
+        if db.query(User).filter(User.email == user_data.email).first():
+             raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered"
+            )
+        current_user.email = user_data.email
+
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 

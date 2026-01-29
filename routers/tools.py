@@ -258,6 +258,25 @@ class ExecuteToolRequest(BaseModel):
     tool_name: str
     parameters: dict
 
+class ToolExecution(BaseModel):
+    """Represents a single tool execution for context"""
+    tool_name: str
+    parameters: dict
+    result: dict
+    timestamp: Optional[str] = None
+
+
+class ExplainRequest(BaseModel):
+    tool_name: str  # Current tool being asked about
+    parameters: dict
+    result: dict
+    provider: Optional[str] = None
+    question: Optional[str] = None  # User's question
+    conversation_history: Optional[List[dict]] = None  # Recent messages
+    all_tool_executions: Optional[List[ToolExecution]] = None  # All tools run in session
+    memory_summary: Optional[str] = None  # LLM summary of older conversation
+    needs_summarization: Optional[bool] = False  # Request to summarize conversation
+
 
 @router.post("/execute")
 def execute_tool(
@@ -313,3 +332,252 @@ def execute_tool(
             error=str(e)
         )
         raise HTTPException(status_code=500, detail=f"Tool execution failed: {str(e)}")
+
+
+@router.post("/explain")
+def explain_tool_output(
+        request: ExplainRequest,
+        current_user: User = Depends(get_current_active_user)
+):
+    """
+    Use LLM to generate explanations of tool output with multi-tool context and memory.
+    Supports:
+    - Multiple tool executions as context
+    - Persistent conversation across tool switches
+    - Memory summarization for long conversations
+    """
+    from logic.llm_providers import LLMProviderFactory
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    import json
+    
+    tool_descriptions = {
+        "ping_host": "ICMP echo request/response test for network connectivity",
+        "nmap_scan": "Network port and service scanner using NMAP",
+        "traceroute_host": "Network path discovery showing router hops to destination",
+        "quick_port_scan": "Fast TCP port scanner using Scapy SYN packets",
+        "arp_scan": "Local network host discovery using ARP protocol",
+        "send_packet": "Custom network packet crafting and transmission using Scapy",
+        "hping3_probe": "Advanced packet probing with TCP/UDP/ICMP using hping3",
+        "dns_lookup_tool": "DNS record resolution for various record types"
+    }
+    
+    # Get the LLM provider first (needed for potential summarization)
+    try:
+        provider_name = request.provider if request.provider and request.provider != 'auto' else None
+        if provider_name:
+            provider = LLMProviderFactory.get_provider(provider_name)
+        else:
+            provider = LLMProviderFactory.get_default_provider()
+        llm = provider.get_chat_model()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM provider error: {str(e)}")
+    
+    # Handle summarization request
+    if request.needs_summarization and request.conversation_history:
+        return _summarize_conversation(request, llm, provider.name, current_user)
+    
+    # Build context from ALL tool executions in the session
+    tool_context_parts = []
+    
+    if request.all_tool_executions:
+        tool_context_parts.append("## Session Tool Execution History")
+        for i, exec in enumerate(request.all_tool_executions[-5:], 1):  # Last 5 tools
+            tool_desc = tool_descriptions.get(exec.tool_name, "Network tool")
+            result_preview = json.dumps(exec.result, default=str)
+            if len(result_preview) > 500:
+                result_preview = result_preview[:500] + "... (truncated)"
+            tool_context_parts.append(f"""
+### Tool {i}: {exec.tool_name}
+- **Description**: {tool_desc}
+- **Parameters**: `{json.dumps(exec.parameters, default=str)}`
+- **Result Preview**: ```{result_preview}```
+""")
+    
+    # Current tool being asked about (with full details)
+    current_tool_desc = tool_descriptions.get(request.tool_name, "Network analysis tool")
+    result_str = json.dumps(request.result, indent=2, default=str)
+    if len(result_str) > 3000:
+        result_str = result_str[:3000] + "\n... (truncated)"
+    params_str = json.dumps(request.parameters, indent=2, default=str)
+    
+    # Build system context
+    memory_context = ""
+    if request.memory_summary:
+        memory_context = f"""
+## Previous Conversation Summary
+The following is a summary of earlier conversation (you may refer to it):
+{request.memory_summary}
+---
+"""
+    
+    tool_history = "\n".join(tool_context_parts) if tool_context_parts else ""
+    
+    system_context = f"""You are Scapyfy Assistant, a network security expert helping users understand network tool outputs.
+
+{memory_context}
+{tool_history}
+
+## Current Tool Output (User's Current Focus)
+**Tool:** {request.tool_name}
+**Description:** {current_tool_desc}
+
+**Parameters:**
+```json
+{params_str}
+```
+
+**Full Output:**
+```json
+{result_str}
+```
+
+## Guidelines
+- Be concise but thorough
+- Use markdown formatting for clarity
+- Explain technical terms when first used
+- Provide security insights when relevant
+- You remember all tools executed in this session
+- If user asks about a previous tool, refer to Session Tool Execution History
+- Connect findings across different tool outputs when relevant"""
+
+    messages = [SystemMessage(content=system_context)]
+    
+    # Add conversation history (recent messages only - older ones are summarized)
+    if request.conversation_history:
+        for msg in request.conversation_history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
+    
+    # Add current question or initial request
+    if request.question:
+        messages.append(HumanMessage(content=request.question))
+    else:
+        initial_prompt = """Please explain this tool's output. Include:
+1. **Summary**: What happened in 1-2 sentences
+2. **Key Findings**: Main observations
+3. **Technical Details**: Important fields and their meaning
+4. **Security Implications**: Any security-relevant observations
+5. **Recommendations**: Suggested next steps
+
+Be concise but informative."""
+        messages.append(HumanMessage(content=initial_prompt))
+    
+    try:
+        response = llm.invoke(messages)
+        explanation = response.content if hasattr(response, 'content') else str(response)
+        
+        logger.log_tool_execution(
+            user=current_user.username,
+            tool_name=f"{request.tool_name}_explain",
+            parameters={"original_tool": request.tool_name, "has_history": bool(request.conversation_history)},
+            source="direct",
+            success=True,
+            result_preview=explanation[:200] if explanation else None
+        )
+        
+        return {
+            "success": True,
+            "tool": request.tool_name,
+            "explanation": explanation,
+            "provider": provider.name,
+            "is_follow_up": bool(request.question)
+        }
+        
+    except Exception as e:
+        logger.log_tool_execution(
+            user=current_user.username,
+            tool_name=f"{request.tool_name}_explain",
+            parameters={"original_tool": request.tool_name},
+            source="direct",
+            success=False,
+            error=str(e)
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to generate explanation: {str(e)}")
+
+
+def _summarize_conversation(request: ExplainRequest, llm, provider_name: str, current_user) -> dict:
+    """
+    Summarize older parts of the conversation to reduce token usage while preserving context.
+    """
+    from langchain_core.messages import SystemMessage, HumanMessage
+    
+    if not request.conversation_history or len(request.conversation_history) < 4:
+        return {
+            "success": True,
+            "summary": None,
+            "message": "Conversation too short to summarize"
+        }
+    
+    # Take older messages to summarize (keep recent ones intact)
+    messages_to_summarize = request.conversation_history[:-4]  # Summarize all but last 4
+    
+    if not messages_to_summarize:
+        return {
+            "success": True,
+            "summary": None,
+            "message": "No messages to summarize"
+        }
+    
+    # Build conversation text to summarize
+    conv_text = []
+    for msg in messages_to_summarize:
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        conv_text.append(f"{role}: {msg.get('content', '')}")
+    
+    conversation_str = "\n\n".join(conv_text)
+    
+    # Include previous summary if exists
+    prev_summary = ""
+    if request.memory_summary:
+        prev_summary = f"\nPrevious summary to incorporate:\n{request.memory_summary}\n"
+    
+    summarize_prompt = f"""Summarize this conversation between a user and an AI assistant about network security tools.
+Preserve:
+- Key findings from tool outputs discussed
+- Important security observations mentioned
+- Any recommendations given
+- Context needed for follow-up questions
+
+Be concise (max 300 words) but preserve essential context.
+{prev_summary}
+Conversation to summarize:
+---
+{conversation_str}
+---
+
+Provide a cohesive summary:"""
+
+    try:
+        response = llm.invoke([
+            SystemMessage(content="You are a helpful assistant that summarizes technical conversations."),
+            HumanMessage(content=summarize_prompt)
+        ])
+        
+        summary = response.content if hasattr(response, 'content') else str(response)
+        
+        logger.log_tool_execution(
+            user=current_user.username,
+            tool_name="conversation_summarize",
+            parameters={"messages_summarized": len(messages_to_summarize)},
+            source="direct",
+            success=True,
+            result_preview=summary[:200] if summary else None
+        )
+        
+        return {
+            "success": True,
+            "summary": summary,
+            "messages_summarized": len(messages_to_summarize),
+            "provider": provider_name
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to summarize conversation"
+        }

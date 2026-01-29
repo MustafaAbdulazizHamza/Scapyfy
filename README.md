@@ -1,4 +1,4 @@
-# Scapyfy v2.0.0
+# Scapyfy v2.1.0
 
 ![Alt text](https://github.com/MustafaAbdulazizHamza/Scapyfy/blob/main/scapyfy.png)
 ---
@@ -7,7 +7,9 @@
 ---
 
 ## Features
-
+### AI-Powered Network Tools
+- **LLM Agent** - Automated network analysis and reporting
+- **AI-assistant** - Interactive chat interface for network analysis in direct tool access mode.
 ### Multi-LLM Support
 - **OpenAI** (GPT-3.5, GPT-4)
 - **Google Gemini** (Gemini 1.5 Flash/Pro)

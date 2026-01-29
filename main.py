@@ -30,36 +30,11 @@ async def initialize_admin_user():
         admin_user = db.query(User).filter(User.id == 0).first()
         
         if not admin_user:
-            admin_password = os.getenv("ROOT_PASSWORD")
-            if not admin_password:
-                admin_password = secrets.token_urlsafe(16)
-                print("=" * 60)
-                print("🔐 ROOT USER CREATED")
-                print("=" * 60)
-                print(f"   Username: root")
-                print(f"   Password: {admin_password}")
-                print("=" * 60)
-                print("⚠️  SECURITY WARNING:")
-                print("   Save this password securely - it will not be shown again!")
-                print("   Set ROOT_PASSWORD env variable to use a custom password.")
-                print("=" * 60)
-            else:
-                print("✅ Root user created with password from ROOT_PASSWORD env var")
-            
-            admin_user = User(
-                id=0,
-                username="root",
-                email=os.getenv("ROOT_EMAIL", "root@scapyfy.example.com"),
-                hashed_password=hash_password(admin_password),
-                is_active=True
-            )
-            db.add(admin_user)
-            db.commit()
+            print("ℹ️  No root user found. Web interface setup required.")
         else:
             print("ℹ️  Root user already exists")
     except Exception as e:
-        print(f"❌ Error initializing root user: {e}")
-        db.rollback()
+        print(f"❌ Error checking root user: {e}")
     finally:
         db.close()
 
