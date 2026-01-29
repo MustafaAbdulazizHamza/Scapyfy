@@ -5,55 +5,96 @@ const AppState = {
     currentView: 'chat',
     provider: 'auto',
     isLoading: false,
-    chatHistory: [],
-    sessionHistory: [],
+    // Current active chat session
+    currentSession: null,
+    // All chat sessions for this user
+    chatSessions: [],
 };
-function getUserHistoryKey(userId) {
-    return `scapyfy_history_user_${userId}`;
+
+function generateSessionId() {
+    return 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
-function getUserChatKey(userId) {
-    return `scapyfy_chat_user_${userId}`;
+
+function getUserSessionsKey(userId) {
+    return `scapyfy_sessions_user_${userId}`;
 }
+
 function isRootUser(user) {
     return user && user.id === 0 && user.username === 'root';
 }
-function loadUserHistory() {
+
+function loadUserSessions() {
     if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserHistoryKey(AppState.user.id);
-        AppState.sessionHistory = JSON.parse(localStorage.getItem(key) || '[]');
+        const key = getUserSessionsKey(AppState.user.id);
+        AppState.chatSessions = JSON.parse(localStorage.getItem(key) || '[]');
     } else {
-        AppState.sessionHistory = [];
+        AppState.chatSessions = [];
     }
 }
-function saveUserHistory() {
+
+function saveUserSessions() {
     if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserHistoryKey(AppState.user.id);
-        localStorage.setItem(key, JSON.stringify(AppState.sessionHistory));
+        const key = getUserSessionsKey(AppState.user.id);
+        localStorage.setItem(key, JSON.stringify(AppState.chatSessions));
     }
 }
-function loadUserChat() {
-    if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserChatKey(AppState.user.id);
-        const savedChat = localStorage.getItem(key);
-        if (savedChat) {
-            AppState.chatHistory = JSON.parse(savedChat);
-            return true;
-        }
+
+function createNewSession() {
+    const session = {
+        id: generateSessionId(),
+        title: 'New Chat',
+        messages: [],
+        memorySummary: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+    AppState.currentSession = session;
+    return session;
+}
+
+function saveCurrentSession() {
+    if (!AppState.currentSession) return;
+
+    AppState.currentSession.updatedAt = new Date().toISOString();
+
+    // Find and update existing or add new
+    const index = AppState.chatSessions.findIndex(s => s.id === AppState.currentSession.id);
+    if (index >= 0) {
+        AppState.chatSessions[index] = AppState.currentSession;
+    } else {
+        AppState.chatSessions.unshift(AppState.currentSession);
     }
-    AppState.chatHistory = [];
+
+    // Keep only last 50 sessions
+    if (AppState.chatSessions.length > 50) {
+        AppState.chatSessions = AppState.chatSessions.slice(0, 50);
+    }
+
+    saveUserSessions();
+}
+
+function loadSession(sessionId) {
+    const session = AppState.chatSessions.find(s => s.id === sessionId);
+    if (session) {
+        AppState.currentSession = JSON.parse(JSON.stringify(session)); // Deep clone
+        return true;
+    }
     return false;
 }
-function saveUserChat() {
-    if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserChatKey(AppState.user.id);
-        localStorage.setItem(key, JSON.stringify(AppState.chatHistory));
+
+function deleteSession(sessionId) {
+    AppState.chatSessions = AppState.chatSessions.filter(s => s.id !== sessionId);
+    saveUserSessions();
+    if (AppState.currentSession && AppState.currentSession.id === sessionId) {
+        createNewSession();
     }
 }
-function clearUserChat() {
-    if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserChatKey(AppState.user.id);
-        localStorage.removeItem(key);
-    }
+
+// Generate title from first user message
+function generateSessionTitle(message) {
+    const maxLen = 40;
+    const clean = message.replace(/[\n\r]+/g, ' ').trim();
+    return clean.length > maxLen ? clean.substring(0, maxLen) + '...' : clean;
 }
 const Router = {
     routes: ['chat', 'history', 'tools', 'admin'],
@@ -172,12 +213,23 @@ const Api = {
     async getStatus() {
         return await this.request('/status');
     },
-    async craft(prompt, maxIterations = 10, provider = null) {
+    async craft(prompt, maxIterations = 10, provider = null, memoryContext = null) {
         return await this.request('/craft', {
             method: 'POST',
             body: JSON.stringify({
                 prompt,
                 max_iterations: maxIterations,
+                provider: provider === 'auto' ? null : provider,
+                memory_context: memoryContext,
+            }),
+        });
+    },
+    async summarize(messages, previousSummary = null, provider = null) {
+        return await this.request('/summarize', {
+            method: 'POST',
+            body: JSON.stringify({
+                messages,
+                previous_summary: previousSummary,
                 provider: provider === 'auto' ? null : provider,
             }),
         });
@@ -340,11 +392,13 @@ const UI = {
             this.autoResizeTextarea(this.elements.chatInput);
         });
         this.elements.clearHistoryBtn.addEventListener('click', () => {
-            if (confirm('Clear all session history? This cannot be undone.')) {
-                AppState.sessionHistory = [];
-                localStorage.removeItem('scapyfy_history');
+            if (confirm('Clear all chat sessions? This cannot be undone.')) {
+                AppState.chatSessions = [];
+                saveUserSessions();
+                createNewSession();
+                Chat.showWelcome();
                 this.renderHistory();
-                Toast.show('History cleared', 'success');
+                UI.showToast('success', 'Cleared', 'All chat sessions have been deleted');
             }
         });
         this.elements.llmProvider.addEventListener('change', (e) => {
@@ -424,7 +478,15 @@ const UI = {
         setTimeout(() => {
             this.elements.loadingScreen.classList.add('hidden');
             if (AppState.token && AppState.user) {
-                loadUserHistory();
+                loadUserSessions();
+                // Start fresh or continue most recent session
+                if (AppState.chatSessions.length > 0) {
+                    loadSession(AppState.chatSessions[0].id);
+                    Chat.restoreSession();
+                } else {
+                    createNewSession();
+                    Chat.showWelcome();
+                }
                 this.showMainApp();
                 this.updateUserInfo();
                 this.updateProviderStatus();
@@ -598,28 +660,80 @@ const UI = {
     },
     renderHistory() {
         const container = this.elements.historyList;
-        if (AppState.sessionHistory.length === 0) {
-            container.innerHTML = `
+
+        // Add New Chat button at the top
+        let html = `
+            <div class="new-chat-btn-container">
+                <button class="btn btn-primary new-chat-btn" onclick="Chat.startNewChat()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span>New Chat</span>
+                </button>
+            </div>
+        `;
+
+        if (AppState.chatSessions.length === 0) {
+            container.innerHTML = html + `
                 <div class="empty-state">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
                     </svg>
-                    <h3>No history yet</h3>
-                    <p>Your packet crafting sessions will appear here</p>
+                    <h3>No chat sessions yet</h3>
+                    <p>Start a new chat to begin your packet crafting journey</p>
                 </div>
             `;
             return;
         }
-        container.innerHTML = AppState.sessionHistory.map((item, index) => `
-            <div class="history-item" onclick="Chat.loadFromHistory(${index})">
-                <div class="history-item-header">
-                    <span class="history-item-prompt">${this.escapeHtml(item.prompt.substring(0, 50))}${item.prompt.length > 50 ? '...' : ''}</span>
-                    <span class="history-item-time">${this.formatTime(item.timestamp)}</span>
+
+        html += AppState.chatSessions.map(session => {
+            const isActive = AppState.currentSession && AppState.currentSession.id === session.id;
+            const messageCount = session.messages.length;
+            const lastMessage = session.messages[session.messages.length - 1];
+            const preview = lastMessage ? lastMessage.content.substring(0, 80) : 'No messages';
+
+            return `
+                <div class="history-item ${isActive ? 'active' : ''}" data-session-id="${session.id}">
+                    <div class="history-item-header">
+                        <span class="history-item-title">${this.escapeHtml(session.title)}</span>
+                        <span class="history-item-time">${this.formatTime(session.updatedAt)}</span>
+                    </div>
+                    <p class="history-item-preview">${this.escapeHtml(preview)}${preview.length >= 80 ? '...' : ''}</p>
+                    <div class="history-item-meta">
+                        <span class="history-item-count">${messageCount} messages</span>
+                        ${session.memorySummary ? '<span class="history-item-memory" title="Has memory context">🧠</span>' : ''}
+                    </div>
+                    <div class="history-item-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="Chat.continueChat('${session.id}')" title="Continue this chat">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                            Continue
+                        </button>
+                        <button class="btn btn-ghost btn-sm btn-danger-text" onclick="UI.confirmDeleteSession('${session.id}')" title="Delete this chat">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <p class="history-item-preview">${this.escapeHtml(item.response.substring(0, 100))}${item.response.length > 100 ? '...' : ''}</p>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+    },
+    confirmDeleteSession(sessionId) {
+        const session = AppState.chatSessions.find(s => s.id === sessionId);
+        if (!session) return;
+
+        if (confirm(`Delete chat "${session.title}"? This cannot be undone.`)) {
+            deleteSession(sessionId);
+            this.renderHistory();
+            UI.showToast('info', 'Chat Deleted', 'The chat session has been removed');
+        }
     },
     formatTime(timestamp) {
         const date = new Date(timestamp);
@@ -689,13 +803,19 @@ const Auth = {
                 localStorage.setItem('scapyfy_user', JSON.stringify(userInfo));
             } catch (e) {
             }
-            loadUserHistory();
-            // Clear any old chat from DOM first, then restore user's saved chat
-            UI.elements.chatMessages.innerHTML = '';
-            Chat.restoreChat() || Chat.clear();  // Restore saved chat, or show welcome if none
+            loadUserSessions();
+            // Start fresh or continue most recent session
+            if (AppState.chatSessions.length > 0) {
+                loadSession(AppState.chatSessions[0].id);
+                Chat.restoreSession();
+            } else {
+                createNewSession();
+                Chat.showWelcome();
+            }
             UI.showMainApp();
             UI.updateUserInfo();
             UI.updateProviderStatus();
+            UI.renderHistory();
             UI.showToast('success', 'Welcome!', `Signed in as ${AppState.user.username}`);
         } catch (error) {
             UI.elements.loginError.classList.remove('hidden');
@@ -711,17 +831,20 @@ const Auth = {
         }
     },
     logout() {
+        // Save current session before logout
+        saveCurrentSession();
+
         AppState.token = null;
         AppState.user = null;
-        AppState.chatHistory = [];
-        AppState.sessionHistory = [];
+        AppState.currentSession = null;
+        AppState.chatSessions = [];
         localStorage.removeItem('scapyfy_token');
         localStorage.removeItem('scapyfy_user');
         history.replaceState(null, '', window.location.pathname);
         UI.closeProfileModal();
         UI.showLoginPage();
         UI.elements.loginForm.reset();
-        Chat.clear();
+        Chat.showWelcome();
         UI.showToast('info', 'Signed Out', 'You have been logged out');
     },
 };
@@ -824,10 +947,17 @@ const Chat = {
         UI.elements.chatMessages.appendChild(messageEl);
         UI.elements.chatMessages.scrollTop = UI.elements.chatMessages.scrollHeight;
 
-        // Save to chat history (unless restoring)
-        if (!skipSave) {
-            AppState.chatHistory.push({ type, content, time });
-            saveUserChat();
+        // Save to current session
+        if (!skipSave && AppState.currentSession) {
+            AppState.currentSession.messages.push({ type, content, time });
+
+            // Update title from first user message
+            if (type === 'user' && AppState.currentSession.title === 'New Chat') {
+                AppState.currentSession.title = generateSessionTitle(content);
+            }
+
+            saveCurrentSession();
+            UI.renderHistory();
         }
 
         return messageEl;
@@ -873,20 +1003,36 @@ const Chat = {
     async send() {
         const prompt = UI.elements.chatInput.value.trim();
         if (!prompt || AppState.isLoading) return;
+
+        // Ensure we have a session
+        if (!AppState.currentSession) {
+            createNewSession();
+        }
+
         const maxIterations = parseInt(UI.elements.maxIterations.value) || 10;
         const provider = AppState.provider;
+
         this.addMessage('user', prompt);
         UI.elements.chatInput.value = '';
         UI.autoResizeTextarea(UI.elements.chatInput);
+
         AppState.isLoading = true;
         UI.elements.sendBtn.disabled = true;
         this.addLoadingMessage();
+
         try {
-            const response = await Api.craft(prompt, maxIterations, provider);
+            // Get memory context from current session
+            const memoryContext = AppState.currentSession.memorySummary;
+
+            const response = await Api.craft(prompt, maxIterations, provider, memoryContext);
             this.removeLoadingMessage();
+
             const reportContent = response.report || 'Task completed';
             this.addMessage('assistant', reportContent);
-            this.saveToHistory(prompt, reportContent);
+
+            // Update memory summary after each interaction
+            await this.updateMemorySummary();
+
         } catch (error) {
             this.removeLoadingMessage();
             this.addMessage('assistant', `❌ Error: ${error.message}`);
@@ -896,7 +1042,24 @@ const Chat = {
             UI.elements.sendBtn.disabled = false;
         }
     },
-    clear() {
+    async updateMemorySummary() {
+        if (!AppState.currentSession || AppState.currentSession.messages.length < 2) return;
+
+        try {
+            const response = await Api.summarize(
+                AppState.currentSession.messages,
+                AppState.currentSession.memorySummary,
+                AppState.provider
+            );
+
+            AppState.currentSession.memorySummary = response.summary;
+            saveCurrentSession();
+        } catch (error) {
+            console.error('Failed to update memory summary:', error);
+            // Continue without updating summary - not critical
+        }
+    },
+    showWelcome() {
         UI.elements.chatMessages.innerHTML = `
             <div class="welcome-message">
                 <div class="welcome-icon">🧙‍♂️</div>
@@ -935,45 +1098,61 @@ const Chat = {
                 <p class="welcome-hint">Try asking: "Scan ports 22, 80, and 443 on 192.168.1.1"</p>
             </div>
         `;
-        AppState.chatHistory = [];
-        clearUserChat();
     },
-    restoreChat() {
-        // Load saved chat from localStorage
-        if (loadUserChat() && AppState.chatHistory.length > 0) {
-            // Clear the welcome message
-            const welcomeMsg = UI.elements.chatMessages.querySelector('.welcome-message');
-            if (welcomeMsg) welcomeMsg.remove();
+    restoreSession() {
+        if (!AppState.currentSession || AppState.currentSession.messages.length === 0) {
+            this.showWelcome();
+            return false;
+        }
 
-            // Restore each message (skipSave=true to avoid duplicating saves)
-            AppState.chatHistory.forEach(msg => {
-                this.addMessage(msg.type, msg.content, null, true);
-            });
-            return true;
-        }
-        return false;
+        UI.elements.chatMessages.innerHTML = '';
+
+        // Restore each message
+        AppState.currentSession.messages.forEach(msg => {
+            this.addMessage(msg.type, msg.content, null, true);
+        });
+
+        return true;
     },
-    saveToHistory(prompt, response) {
-        const historyItem = {
-            prompt,
-            response,
-            timestamp: new Date().toISOString(),
-            provider: AppState.provider,
-        };
-        AppState.sessionHistory.unshift(historyItem);
-        if (AppState.sessionHistory.length > 50) {
-            AppState.sessionHistory = AppState.sessionHistory.slice(0, 50);
+    startNewChat() {
+        // Save current session before starting new one
+        if (AppState.currentSession && AppState.currentSession.messages.length > 0) {
+            saveCurrentSession();
         }
-        saveUserHistory();
+
+        createNewSession();
+        this.showWelcome();
         UI.renderHistory();
-    },
-    loadFromHistory(index) {
-        const item = AppState.sessionHistory[index];
-        if (!item) return;
         UI.switchView('chat');
-        this.clear();
-        this.addMessage('user', item.prompt);
-        this.addMessage('assistant', item.response);
+    },
+    continueChat(sessionId) {
+        const session = AppState.chatSessions.find(s => s.id === sessionId);
+
+        // Check if session has memory context
+        if (!session || !session.memorySummary) {
+            UI.showToast('warning', 'No Context', 'This chat has no memory context. Starting a new chat instead.');
+            this.startNewChat();
+            return;
+        }
+
+        // Save current session first
+        if (AppState.currentSession && AppState.currentSession.messages.length > 0) {
+            saveCurrentSession();
+        }
+
+        if (loadSession(sessionId)) {
+            this.restoreSession();
+            UI.switchView('chat');
+            UI.showToast('info', 'Chat Loaded', `Continuing: ${AppState.currentSession.title}`);
+        }
+    },
+    // View a chat without continuing (for chats without memory)
+    viewChat(sessionId) {
+        if (loadSession(sessionId)) {
+            this.restoreSession();
+            UI.switchView('chat');
+            UI.showToast('info', 'Viewing Chat', 'This is a read-only view. Start a new chat to continue.');
+        }
     },
 };
 const DirectTools = {

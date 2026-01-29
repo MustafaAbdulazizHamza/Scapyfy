@@ -70,7 +70,9 @@ Available tools:
 - dns_lookup_tool: DNS queries (A, AAAA, MX, NS, TXT, SOA, CNAME, PTR, SRV, CAA)
 - final_report: Submit your final analysis
 
-Write all reports in plain text with clear formatting."""
+Write all reports in plain text with clear formatting.
+
+{memory_context}"""
 
 system_prompt_template = SystemMessagePromptTemplate.from_template(SYSTEM_PROMPT)
 user_prompt_template = HumanMessagePromptTemplate.from_template(
@@ -90,9 +92,11 @@ class AgentExecutor:
         self,
         max_iterations: int = 10,
         provider: Optional[LLMProvider] = None,
-        provider_name: Optional[str] = None
+        provider_name: Optional[str] = None,
+        memory_context: Optional[str] = None
     ):
         self.max_iterations = max_iterations
+        self.memory_context = memory_context or ""
         
         if provider:
             self.provider = provider
@@ -104,10 +108,16 @@ class AgentExecutor:
         self.llm = self.provider.get_chat_model()
         self.model_name = getattr(self.llm, 'model_name', getattr(self.llm, 'model', 'unknown'))
         
+        # Format memory context for the prompt
+        memory_text = ""
+        if self.memory_context:
+            memory_text = f"\n\n**Previous Session Context:**\n{self.memory_context}"
+        
         self.agent: RunnableSerializable = (
             {
                 "situation": lambda x: x["situation"],
-                "agent_scratchpad": lambda x: x.get("agent_scratchpad", [])
+                "agent_scratchpad": lambda x: x.get("agent_scratchpad", []),
+                "memory_context": lambda x: memory_text
             }
             | prompt
             | self.llm.bind_tools(ALL_TOOLS_WITH_REPORT, tool_choice="auto")
@@ -213,7 +223,8 @@ def llm_crafter(
     prompt_text: str,
     user: str,
     max_iterations: int = 10,
-    provider_name: Optional[str] = None
+    provider_name: Optional[str] = None,
+    memory_context: Optional[str] = None
 ) -> str:
     context = SessionContext(
         user=user,
@@ -225,7 +236,8 @@ def llm_crafter(
     try:
         executor = AgentExecutor(
             max_iterations=max_iterations,
-            provider_name=provider_name
+            provider_name=provider_name,
+            memory_context=memory_context
         )
         context.provider_name = executor.provider.name
         context.model_name = executor.model_name
@@ -250,6 +262,73 @@ def llm_crafter(
             session_id=context.session_id
         )
         raise RuntimeError(f"Agent execution failed: {e}") from e
+
+
+def summarize_chat(
+    messages: list,
+    previous_summary: Optional[str] = None,
+    provider_name: Optional[str] = None
+) -> str:
+    """
+    Summarize chat messages into a memory context for future interactions.
+    """
+    if provider_name:
+        provider = LLMProviderFactory.get_provider(provider_name)
+    else:
+        provider = LLMProviderFactory.get_default_provider()
+    
+    llm = provider.get_chat_model()
+    
+    # Build the conversation text
+    conversation = ""
+    for msg in messages:
+        role = "User" if msg.get("type") == "user" else "Assistant"
+        conversation += f"{role}: {msg.get('content', '')}\n\n"
+    
+    # Build the summarization prompt
+    if previous_summary:
+        prompt = f"""You are summarizing a chat conversation for memory purposes.
+
+Previous context summary:
+{previous_summary}
+
+New conversation to incorporate:
+{conversation}
+
+Create a concise but comprehensive summary that:
+1. Captures the key topics discussed
+2. Notes any important findings, targets, or results
+3. Preserves context for future related queries
+4. Is written in a way that helps continue the conversation naturally
+
+Keep the summary under 500 words. Focus on actionable information."""
+    else:
+        prompt = f"""You are summarizing a chat conversation for memory purposes.
+
+Conversation:
+{conversation}
+
+Create a concise but comprehensive summary that:
+1. Captures the key topics discussed
+2. Notes any important findings, targets, or results  
+3. Preserves context for future related queries
+4. Is written in a way that helps continue the conversation naturally
+
+Keep the summary under 500 words. Focus on actionable information."""
+    
+    try:
+        response = llm.invoke(prompt)
+        return response.content if hasattr(response, 'content') else str(response)
+    except Exception as e:
+        logger.log_llm_error(
+            user="system",
+            provider=provider.name,
+            model=getattr(llm, 'model_name', 'unknown'),
+            error=f"Summarization failed: {e}",
+            session_id="summarize"
+        )
+        # Return a basic summary if LLM fails
+        return f"Previous conversation with {len(messages)} messages."
 
 
 def get_available_providers() -> list:

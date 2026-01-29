@@ -20,7 +20,8 @@ def craft_packet(
             prompt_text=craft_request.prompt,
             user=current_user.username,
             max_iterations=craft_request.max_iterations,
-            provider_name=craft_request.provider
+            provider_name=craft_request.provider,
+            memory_context=craft_request.memory_context
         )
         
         return schemas.CraftingResponse(
@@ -32,6 +33,30 @@ def craft_packet(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to craft packet: {str(e)}"
+        )
+
+
+@router.post("/summarize", response_model=schemas.SummarizeResponse)
+def summarize_chat(
+        request: schemas.SummarizeRequest,
+        current_user: User = Depends(get_current_active_user)
+):
+    """Generate a memory summary from chat messages for context preservation."""
+    try:
+        summary = loop.summarize_chat(
+            messages=request.messages,
+            previous_summary=request.previous_summary,
+            provider_name=request.provider
+        )
+        
+        return schemas.SummarizeResponse(
+            summary=summary,
+            provider=request.provider or "auto"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to summarize chat: {str(e)}"
         )
 
 

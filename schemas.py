@@ -48,6 +48,7 @@ class CraftingRequest(BaseModel):
     prompt: str
     max_iterations: Optional[int] = 10
     provider: Optional[str] = None
+    memory_context: Optional[str] = None  # LLM-summarized context from previous interactions
     
     @field_validator('max_iterations')
     @classmethod
@@ -69,6 +70,18 @@ class CraftingRequest(BaseModel):
 class CraftingResponse(BaseModel):
     success: bool
     report: str
+    provider: Optional[str] = None
+    memory_summary: Optional[str] = None  # LLM-generated summary for next interaction
+
+
+class SummarizeRequest(BaseModel):
+    messages: list  # List of {type: 'user'|'assistant', content: str}
+    previous_summary: Optional[str] = None
+    provider: Optional[str] = None
+
+
+class SummarizeResponse(BaseModel):
+    summary: str
     provider: Optional[str] = None
 
 

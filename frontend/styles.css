@@ -748,6 +748,11 @@ body {
     padding-bottom: var(--space-lg);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     margin-bottom: var(--space-lg);
+    gap: var(--space-md);
+}
+
+.chat-title {
+    flex: 1;
 }
 
 .chat-title h2 {
@@ -758,6 +763,15 @@ body {
 .chat-subtitle {
     color: var(--text-muted);
     font-size: 0.9rem;
+}
+
+.btn-new-chat {
+    flex-shrink: 0;
+}
+
+.btn-new-chat svg {
+    width: 16px;
+    height: 16px;
 }
 
 .chat-messages {
@@ -1112,35 +1126,60 @@ body {
     color: var(--text-secondary);
 }
 
+.new-chat-btn-container {
+    margin-bottom: var(--space-lg);
+}
+
+.new-chat-btn {
+    width: 100%;
+    padding: var(--space-md) var(--space-lg);
+}
+
+.new-chat-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
 .history-item {
     background: var(--surface-glass);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-md);
     padding: var(--space-lg);
     margin-bottom: var(--space-md);
-    cursor: pointer;
     transition: all var(--transition-fast);
 }
 
 .history-item:hover {
     background: var(--surface-glass-hover);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.history-item.active {
     border-color: var(--accent-primary);
+    background: var(--accent-primary-glow);
 }
 
 .history-item-header {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     margin-bottom: var(--space-sm);
 }
 
-.history-item-prompt {
+.history-item-title {
     color: var(--text-primary);
     font-weight: 500;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: var(--space-md);
 }
 
 .history-item-time {
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
 }
 
 .history-item-preview {
@@ -1151,7 +1190,52 @@ body {
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    margin-bottom: var(--space-sm);
 }
+
+.history-item-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.history-item-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.history-item-memory {
+    font-size: 0.9rem;
+    cursor: help;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-item-actions .btn-sm {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.8rem;
+}
+
+.history-item-actions .btn-sm svg {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-danger-text {
+    color: var(--danger);
+}
+
+.btn-danger-text:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
 
 .tools-grid {
     display: grid;
