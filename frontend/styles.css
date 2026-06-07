@@ -253,10 +253,15 @@ body {
     pointer-events: none;
 }
 
-.input-wrapper input {
+.input-wrapper input,
+.input-wrapper select,
+.input-wrapper textarea,
+input.input-wrapper,
+select.input-wrapper,
+textarea.input-wrapper {
     width: 100%;
-    padding: var(--space-md) var(--space-md) var(--space-md) calc(var(--space-md) * 2 + 20px);
-    background: var(--surface-glass);
+    padding: var(--space-md) var(--space-md) var(--space-md) var(--space-md);
+    background: rgba(15, 15, 35, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-md);
     color: var(--text-primary);
@@ -265,13 +270,62 @@ body {
     transition: all var(--transition-normal);
 }
 
-.input-wrapper input:focus {
+/* Select-specific: override native white popup with dark theme */
+.input-wrapper select,
+select.input-wrapper {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236a6a7a' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+    cursor: pointer;
+    background-color: #0f0f23;
+}
+
+/* Option list inherits bg from select (works on most browsers/OS) */
+.input-wrapper select option,
+select.input-wrapper option {
+    background-color: #0f0f23;
+    color: var(--text-primary);
+    padding: 0.5rem;
+}
+
+.input-wrapper select option:checked,
+select.input-wrapper option:checked {
+    background-color: rgba(99, 102, 241, 0.3);
+    color: #fff;
+}
+
+/* Multi-select height override */
+.input-wrapper select[multiple],
+select.input-wrapper[multiple] {
+    background-image: none;
+    padding-right: var(--space-md);
+    overflow-y: auto;
+}
+
+.input-icon~input,
+.input-icon~select,
+.input-icon~textarea {
+    padding-left: calc(var(--space-md) * 2 + 20px);
+}
+
+.input-wrapper input:focus,
+.input-wrapper select:focus,
+.input-wrapper textarea:focus,
+input.input-wrapper:focus,
+select.input-wrapper:focus,
+textarea.input-wrapper:focus {
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 3px var(--accent-primary-glow);
 }
 
-.input-wrapper input::placeholder {
+.input-wrapper input::placeholder,
+.input-wrapper textarea::placeholder,
+input.input-wrapper::placeholder,
+textarea.input-wrapper::placeholder {
     color: var(--text-muted);
 }
 
@@ -350,6 +404,26 @@ body {
 
 .btn-danger:hover {
     background: #dc2626;
+    transform: translateY(-2px);
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: #0a0a1a;
+}
+
+.btn-warning:hover {
+    background: #d97706;
+    transform: translateY(-2px);
+}
+
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
     transform: translateY(-2px);
 }
 
@@ -819,6 +893,7 @@ body {
     align-items: center;
     gap: var(--space-sm);
     transition: all var(--transition-fast);
+    cursor: pointer;
 }
 
 .capability-card:hover {
@@ -935,6 +1010,37 @@ body {
     font-size: 0.9em;
 }
 
+.message-body h1,
+.message-body h2,
+.message-body h3,
+.message-body h4 {
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-sm);
+    color: var(--text-primary);
+}
+
+.message-body h1 { font-size: 1.4em; }
+.message-body h2 { font-size: 1.25em; }
+.message-body h3 { font-size: 1.1em; }
+
+.message-body ul,
+.message-body ol {
+    margin: var(--space-sm) 0 var(--space-sm) var(--space-xl);
+    padding-left: var(--space-md);
+}
+
+.message-body li {
+    margin-bottom: var(--space-xs);
+}
+
+.message-body p {
+    margin-bottom: var(--space-sm);
+}
+
+.message-body p:last-child {
+    margin-bottom: 0;
+}
+
 .message.loading .message-body {
     display: flex;
     align-items: center;
@@ -1033,8 +1139,14 @@ body {
     color: var(--text-secondary);
 }
 
-.iteration-control input {
-    width: 60px;
+.iteration-control label {
+    width: 80px;
+    text-align: left;
+}
+
+.iteration-control input,
+.iteration-control select {
+    width: 80px;
     padding: var(--space-xs) var(--space-sm);
     background: var(--bg-tertiary);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1043,9 +1155,11 @@ body {
     font-family: inherit;
     font-size: 0.85rem;
     text-align: center;
+    cursor: pointer;
 }
 
-.iteration-control input:focus {
+.iteration-control input:focus,
+.iteration-control select:focus {
     outline: none;
     border-color: var(--accent-primary);
 }
@@ -1376,6 +1490,10 @@ body {
     font-weight: 600;
 }
 
+.profile-avatar-large:hover .avatar-upload-overlay {
+    opacity: 1 !important;
+}
+
 .profile-info h3 {
     font-size: 1.25rem;
     font-weight: 600;
@@ -1687,19 +1805,6 @@ body {
     overflow-y: auto;
 }
 
-.tool-selector-container {
-    padding: var(--space-lg);
-    background: var(--surface-glass);
-    border-radius: var(--radius-lg);
-    margin-bottom: var(--space-lg);
-}
-
-.tool-selector-container label {
-    display: block;
-    margin-bottom: var(--space-sm);
-    color: var(--text-secondary);
-    font-weight: 500;
-}
 
 .tool-select {
     width: 100%;
@@ -1801,6 +1906,49 @@ body {
     font-family: var(--font-mono);
     font-size: 0.9rem;
     transition: var(--transition-normal);
+}
+
+.input-wrapper {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    transition: all var(--transition-fast);
+}
+
+.conn-chip {
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all var(--transition-fast);
+    user-select: none;
+}
+
+.conn-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.conn-chip.active {
+    background: var(--accent-primary-glow);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+.conn-type-badge {
+    font-size: 0.7rem;
+    background: rgba(0,0,0,0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: capitalize;
 }
 
 .tool-param-group textarea {
@@ -4192,10 +4340,10 @@ body {
 /* Help Popover */
 .help-popover {
     position: absolute;
-    top: 100%;
+    bottom: 100%;
     left: 0;
     right: 0;
-    margin-top: var(--space-sm);
+    margin-bottom: var(--space-sm);
     background: var(--bg-secondary);
     border: 1px solid rgba(99, 102, 241, 0.3);
     border-radius: var(--radius-lg);
@@ -4225,13 +4373,13 @@ body {
 
 .help-popover-arrow {
     position: absolute;
-    top: -6px;
+    bottom: -6px;
     left: 80px;
     width: 12px;
     height: 12px;
     background: var(--bg-secondary);
-    border-left: 1px solid rgba(99, 102, 241, 0.3);
-    border-top: 1px solid rgba(99, 102, 241, 0.3);
+    border-right: 1px solid rgba(99, 102, 241, 0.3);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.3);
     transform: rotate(45deg);
 }
 
@@ -4337,4 +4485,154 @@ body {
 /* Position helper for sidebar section */
 .sidebar-section {
     position: relative;
+}
+
+/* ============================================================
+   Task Builder Modal – Tabs & Step Cards
+   ============================================================ */
+
+/* Tab bar */
+.task-modal-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
+}
+
+.task-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.9rem 1.5rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition-fast);
+    font-family: inherit;
+}
+
+.task-tab-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.task-tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.task-tab-btn.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.06);
+}
+
+/* Steps section header */
+.task-steps-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.task-steps-header h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.task-steps-header h4 svg {
+    width: 18px;
+    height: 18px;
+    color: var(--accent-primary);
+}
+
+/* Step card – matches modal background, no extra glass-on-glass */
+.task-step {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    transition: border-color var(--transition-fast);
+}
+
+.task-step:last-child {
+    margin-bottom: 0;
+}
+
+.task-step:hover {
+    border-left-color: var(--accent-secondary);
+}
+
+/* Step header row */
+.task-step-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    gap: 0;
+}
+
+.task-step-number {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent-primary);
+    white-space: nowrap;
+    min-width: 52px;
+}
+
+/* Connection type selector grid */
+.conn-type-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.conn-type-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.conn-type-card:hover {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.conn-type-card.active {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.conn-type-card .icon {
+    font-size: 1.5rem;
+}
+
+.conn-type-card .info strong {
+    display: block;
+    font-size: 0.9rem;
+}
+
+.conn-type-card .info small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
 }

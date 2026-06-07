@@ -35,15 +35,13 @@ class SessionContext:
     model_name: str = ""
 
 
-def get_session_context() -> Optional[SessionContext]:
-    return getattr(_session_context, 'context', None)
 
 
 def set_session_context(context: SessionContext):
     _session_context.context = context
 
 
-SYSTEM_PROMPT = """You are Prof. Packet Crafter, an expert network security analyst and packet crafting assistant in a lab environment.
+AGENT_SYSTEM_PROMPT = """You are Prof. Packet Crafter, an expert network security analyst and packet crafting assistant in a lab environment.
 
 Your capabilities include:
 1. **Packet Crafting**: Create and send custom network packets using Scapy
@@ -55,7 +53,6 @@ Guidelines:
 - Use IP layer by default unless the task explicitly requires Ethernet layer
 - Always validate targets and parameters before executing tools
 - Provide clear, detailed reports of your findings
-- For passive crafting requests, use craft_packet_json or final_report to return packet structures without sending
 - Be security-conscious and educational in your explanations
 
 Available tools:
@@ -68,22 +65,46 @@ Available tools:
 - quick_port_scan: Fast Scapy-based port scan
 - arp_scan: Local network host discovery
 - dns_lookup_tool: DNS queries (A, AAAA, MX, NS, TXT, SOA, CNAME, PTR, SRV, CAA)
+- http_request: Send HTTP/HTTPS requests
 - final_report: Submit your final analysis
+
+CRITICAL INSTRUCTION: You MUST use the native tool calling API. If your environment does not support native tool calling, you MUST output EXACTLY ONE JSON block for your tool call:
+```json
+{{"name": "tool_name", "parameters": {{"arg1": "value1"}}}}
+```
+DO NOT output python function calls like `tool_name(arg1=value1)`.
+To communicate with the user, you MUST use the final_report tool.
 
 Write all reports in plain text with clear formatting.
 
 {memory_context}"""
 
-system_prompt_template = SystemMessagePromptTemplate.from_template(SYSTEM_PROMPT)
-user_prompt_template = HumanMessagePromptTemplate.from_template(
-    "Task:\n'''{situation}'''"
-)
+ASK_SYSTEM_PROMPT = """You are Prof. Packet Crafter, an expert network security analyst and packet crafting assistant in a lab environment.
 
-prompt = ChatPromptTemplate.from_messages([
-    system_prompt_template,
-    user_prompt_template,
-    MessagesPlaceholder(variable_name="agent_scratchpad"),
-])
+Your capabilities include:
+1. **Explanation**: Explain networking concepts, packet structures, and security principles.
+2. **Passive Crafting**: Generate packet structures as JSON without executing or sending them.
+
+Guidelines:
+- Do NOT attempt to perform active network scans or send packets. You are in ASK MODE.
+- When asked to craft a packet, use the craft_packet_json tool to return the packet structure.
+- Provide clear, detailed, and educational explanations.
+- Be security-conscious in your explanations.
+
+Available tools:
+- craft_packet_json: Create packet structure without sending
+- final_report: Submit your final analysis
+
+CRITICAL INSTRUCTION: You MUST use the native tool calling API. If your environment does not support native tool calling, you MUST output EXACTLY ONE JSON block for your tool call:
+```json
+{{"name": "tool_name", "parameters": {{"arg1": "value1"}}}}
+```
+DO NOT output python function calls like `tool_name(arg1=value1)`.
+To communicate with the user, you MUST use the final_report tool.
+
+Write all reports in plain text with clear formatting.
+
+{memory_context}"""
 
 
 class AgentExecutor:
@@ -93,10 +114,12 @@ class AgentExecutor:
         max_iterations: int = 10,
         provider: Optional[LLMProvider] = None,
         provider_name: Optional[str] = None,
-        memory_context: Optional[str] = None
+        memory_context: Optional[str] = None,
+        mode: str = "agent"
     ):
         self.max_iterations = max_iterations
         self.memory_context = memory_context or ""
+        self.mode = mode
         
         if provider:
             self.provider = provider
@@ -112,6 +135,21 @@ class AgentExecutor:
         memory_text = ""
         if self.memory_context:
             memory_text = f"\n\n**Previous Session Context:**\n{self.memory_context}"
+            
+        if self.mode == "ask":
+            system_prompt = ASK_SYSTEM_PROMPT
+            allowed_tools = [t for t in ALL_TOOLS_WITH_REPORT if t.name in ("craft_packet_json", "final_report")]
+        else:
+            system_prompt = AGENT_SYSTEM_PROMPT
+            allowed_tools = ALL_TOOLS_WITH_REPORT
+            
+        self.allowed_tools = allowed_tools
+            
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessagePromptTemplate.from_template(system_prompt),
+            HumanMessagePromptTemplate.from_template("Task:\n'''{situation}'''"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
         
         self.agent: RunnableSerializable = (
             {
@@ -120,7 +158,7 @@ class AgentExecutor:
                 "memory_context": lambda x: memory_text
             }
             | prompt
-            | self.llm.bind_tools(ALL_TOOLS_WITH_REPORT, tool_choice="auto")
+            | self.llm.bind_tools(allowed_tools, tool_choice="auto")
         )
     
     def invoke(self, situation: str, context: SessionContext) -> str:
@@ -145,18 +183,87 @@ class AgentExecutor:
                 return f"LLM invocation error: {e}"
             
             if not response.tool_calls:
-                logger.log_llm_response(
-                    user=context.user,
-                    provider=context.provider_name,
-                    model=context.model_name,
-                    response_length=len(str(response.content)) if response.content else 0,
-                    tool_calls=[],
-                    session_id=context.session_id,
-                    duration_ms=duration_ms
-                )
+                # Fallback: attempt to parse tool call from content if it's JSON
+                parsed_fallback_tools = []
                 if response.content:
-                    return str(response.content)
-                return "Agent completed without producing output"
+                    try:
+                        import json
+                        content_str = str(response.content).strip()
+                        
+                        # Try to extract JSON block using curly braces if no markdown blocks
+                        if "```" in content_str:
+                            if "```json" in content_str:
+                                json_str = content_str.split("```json")[1].split("```")[0].strip()
+                            else:
+                                json_str = content_str.split("```")[1].split("```")[0].strip()
+                        else:
+                            # Find first { and last }
+                            start = content_str.find('{')
+                            end = content_str.rfind('}')
+                            if start != -1 and end != -1 and end > start:
+                                json_str = content_str[start:end+1]
+                            else:
+                                json_str = content_str
+                                
+                        try:
+                            data = json.loads(json_str)
+                        except json.JSONDecodeError:
+                            import ast
+                            # Sometimes LLMs output Python dictionaries with True/False instead of true/false
+                            data = ast.literal_eval(json_str)
+                            
+                        if isinstance(data, dict) and "name" in data and ("parameters" in data or "args" in data):
+                            args = data.get("parameters") or data.get("args", {})
+                            parsed_fallback_tools.append({
+                                "name": data["name"],
+                                "args": args,
+                                "id": "call_" + str(uuid.uuid4())[:8]
+                            })
+                    except Exception:
+                        pass
+                        
+                if not parsed_fallback_tools and response.content:
+                    import re
+                    import ast
+                    valid_tool_names = [t.name for t in self.allowed_tools]
+                    func_pattern = re.compile(r'(\w+)\s*\((.*?)\)', re.DOTALL)
+                    for match in func_pattern.finditer(str(response.content)):
+                        func_name = match.group(1)
+                        if func_name in valid_tool_names:
+                            args_str = match.group(2)
+                            try:
+                                expr = ast.parse(f"dummy({args_str})", mode='eval')
+                                kwargs = {}
+                                for kw in expr.body.keywords:
+                                    val = ast.literal_eval(kw.value)
+                                    if isinstance(val, dict):
+                                        import json
+                                        kwargs[kw.arg] = json.dumps(val)
+                                    else:
+                                        kwargs[kw.arg] = val
+                                parsed_fallback_tools.append({
+                                    "name": func_name,
+                                    "args": kwargs,
+                                    "id": "call_" + str(uuid.uuid4())[:8]
+                                })
+                            except Exception:
+                                pass
+                
+                if parsed_fallback_tools:
+                    response.tool_calls = parsed_fallback_tools
+                else:
+                    logger.log_llm_response(
+                        user=context.user,
+                        provider=context.provider_name,
+                        model=context.model_name,
+                        response_length=len(str(response.content)) if response.content else 0,
+                        tool_calls=[],
+                        session_id=context.session_id,
+                        duration_ms=duration_ms
+                    )
+                    if response.content:
+                        return str(response.content)
+                    return "Agent completed without producing output"
             
             tool_call_names = [tc["name"] for tc in response.tool_calls]
             logger.log_llm_response(
@@ -224,7 +331,8 @@ def llm_crafter(
     user: str,
     max_iterations: int = 10,
     provider_name: Optional[str] = None,
-    memory_context: Optional[str] = None
+    memory_context: Optional[str] = None,
+    mode: str = "agent"
 ) -> str:
     context = SessionContext(
         user=user,
@@ -237,7 +345,8 @@ def llm_crafter(
         executor = AgentExecutor(
             max_iterations=max_iterations,
             provider_name=provider_name,
-            memory_context=memory_context
+            memory_context=memory_context,
+            mode=mode
         )
         context.provider_name = executor.provider.name
         context.model_name = executor.model_name

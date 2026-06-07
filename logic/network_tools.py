@@ -6,6 +6,7 @@ import json
 import shutil
 import re
 from typing import Optional
+import requests
 
 
 @tool
@@ -101,6 +102,12 @@ def ping_host(target: str, count: int = 4, timeout: int = 2, arguments: Optional
         timeout: Timeout in seconds for each ping (default: 2).
         arguments: Additional arguments for ping command.
     """
+    try:
+        count = int(count)
+        timeout = int(timeout)
+    except (ValueError, TypeError):
+        return "Error: count and timeout must be integers"
+        
     # Delegate to the standalone ping function
     result = ping(target, count, timeout, arguments)
     
@@ -120,6 +127,12 @@ def traceroute_host(target: str, max_hops: int = 30, use_scapy: bool = True, arg
         use_scapy: Use Scapy's traceroute (True) or system traceroute (False).
         arguments: Additional arguments for system traceroute.
     """
+    try:
+        max_hops = int(max_hops)
+    except (ValueError, TypeError):
+        return "Error: max_hops must be an integer"
+        
+    use_scapy = str(use_scapy).lower() in ("true", "1", "yes", "t", "y") if not isinstance(use_scapy, bool) else use_scapy
     max_hops = min(max(1, max_hops), 64)
     
     if not re.match(r'^[\w\.\-]+$', target):
@@ -194,6 +207,12 @@ def hping3_probe(
     if not shutil.which("hping3"):
         return "hping3 is not installed. Please install with: sudo apt install hping3"
     
+    try:
+        port = int(port)
+        count = int(count)
+    except (ValueError, TypeError):
+        return "Error: port and count must be integers"
+        
     if not re.match(r'^[\w\.\-]+$', target):
         return "Invalid target format"
     
@@ -309,7 +328,7 @@ def arp_scan(network: str = "192.168.1.0/24") -> str:
             return "No hosts discovered"
         
         results = ["ARP Scan Results:", "-" * 40]
-        for sent, received in answered:
+        for _, received in answered:
             results.append(f"IP: {received.psrc:15} MAC: {received.hwsrc}")
         
         results.append("-" * 40)
@@ -604,11 +623,72 @@ def dns_lookup(target: str, record_type: str = "A") -> dict:
         }
 
 
+@tool
+def http_request(url: str, method: str = "GET", headers: Optional[str] = None, data: Optional[str] = None, timeout: int = 10) -> str:
+    """
+    Send an HTTP(s) request and get the response.
+    
+    Args:
+        url: The URL to send the request to (must include http:// or https://).
+        method: The HTTP method (GET, POST, PUT, DELETE, etc.).
+        headers: Optional JSON string representing the HTTP headers.
+        data: Optional payload string for methods like POST or PUT.
+        timeout: Request timeout in seconds.
+    
+    Returns:
+        The HTTP response containing status code, headers, and body.
+    """
+    try:
+        timeout = int(timeout)
+    except (ValueError, TypeError):
+        return "Error: timeout must be an integer"
+        
+    headers_dict = {}
+    if headers:
+        try:
+            headers_dict = json.loads(headers)
+        except json.JSONDecodeError as e:
+            return f"Invalid headers JSON: {e}"
+            
+    try:
+        response = requests.request(
+            method=method.upper(),
+            url=url,
+            headers=headers_dict,
+            data=data,
+            timeout=timeout
+        )
+        
+        result = [
+            f"Status Code: {response.status_code} {response.reason}",
+            "Headers:"
+        ]
+        
+        for k, v in response.headers.items():
+            result.append(f"  {k}: {v}")
+            
+        result.append("\nBody:")
+        
+        body_text = response.text
+        if len(body_text) > 10000:
+            result.append(body_text[:10000] + "\n...[truncated]")
+        else:
+            result.append(body_text)
+            
+        return "\n".join(result)
+        
+    except requests.exceptions.Timeout:
+        return f"HTTP request timed out after {timeout} seconds"
+    except requests.exceptions.RequestException as e:
+        return f"HTTP request failed: {e}"
+
+
 def check_nmap_available() -> bool:
     return shutil.which("nmap") is not None
 
 
 ALL_TOOLS = [
+    http_request,
     send_packet,
     craft_packet_json,
     ping_host,

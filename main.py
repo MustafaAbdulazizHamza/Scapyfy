@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from database import get_db, engine
 from models import Base, User
 from hashing import hash_password
-from routers import user, login, crafter, tools
+from routers import user, login, crafter, tools, connections, tasks, messages
 from logger import get_logger
 import os
 import secrets
@@ -20,8 +20,31 @@ logger = get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        from sqlalchemy import text
+        db = next(get_db())
+        db.execute(text("ALTER TABLE users ADD COLUMN avatar_data TEXT;"))
+        db.commit()
+        db.close()
+    except Exception as e:
+        print("Migration:", e)
+        
     await initialize_admin_user()
+    # Load scheduled tasks
+    try:
+        from logic.scheduler import load_active_tasks, get_scheduler
+        get_scheduler()  # Ensure scheduler is started
+        load_active_tasks()
+    except Exception as e:
+        print(f"⚠️  Scheduler initialization warning: {e}")
     yield
+    # Shutdown scheduler
+    try:
+        from logic.scheduler import shutdown_scheduler
+        shutdown_scheduler()
+        print("📅 Scheduler shut down")
+    except Exception:
+        pass
 
 
 async def initialize_admin_user():
@@ -78,7 +101,7 @@ async def log_requests(request: Request, call_next):
     duration_ms = (time.time() - start_time) * 1000
     
     path = request.url.path
-    if not path.startswith(("/assets", "/styles.css", "/app.js", "/docs", "/openapi.json", "/redoc")):
+    if not path.startswith(("/assets", "/styles.css", "/app.js", "/tasks_connections.js", "/docs", "/openapi.json", "/redoc")):
         user = "anonymous"
         if hasattr(request.state, "user"):
             user = getattr(request.state.user, "username", "anonymous")
@@ -99,6 +122,10 @@ app.include_router(login.router)
 app.include_router(user.router)
 app.include_router(crafter.router)
 app.include_router(tools.router)
+app.include_router(connections.router)
+app.include_router(connections.public_router)
+app.include_router(tasks.router)
+app.include_router(messages.router)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
@@ -116,6 +143,14 @@ if os.path.exists(FRONTEND_DIR):
     @app.get("/app.js")
     async def get_app_js():
         response = FileResponse(os.path.join(FRONTEND_DIR, "app.js"), media_type="application/javascript")
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+    @app.get("/tasks_connections.js")
+    async def get_tasks_connections_js():
+        response = FileResponse(os.path.join(FRONTEND_DIR, "tasks_connections.js"), media_type="application/javascript")
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"

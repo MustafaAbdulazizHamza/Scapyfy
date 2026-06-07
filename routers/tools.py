@@ -146,7 +146,7 @@ def dns_lookup(
 def tools_status(current_user: User = Depends(get_current_active_user)):
     return {
         "nmap_available": network_tools.check_nmap_available(),
-        "tools": ["ping", "nmap", "traceroute", "dns", "send_packet", "quick_port_scan", "arp_scan", "hping3", "unicornscan"],
+        "tools": ["ping", "nmap", "traceroute", "dns", "send_packet", "quick_port_scan", "arp_scan", "hping3", "unicornscan", "http_request"],
         "user": current_user.username
     }
 
@@ -236,13 +236,26 @@ def list_tools(current_user: User = Depends(get_current_active_user)):
                 {"name": "nameserver", "type": "string", "required": False, "description": "DNS server to use (e.g., '8.8.8.8')"}
             ],
             "example_usage": {"target": "google.com", "record_types": "A,MX,NS,TXT", "nameserver": "8.8.8.8"}
+        },
+        {
+            "name": "http_request",
+            "description": "Send an HTTP(s) request and get the response",
+            "parameters": [
+                {"name": "url", "type": "string", "required": True, "description": "The URL to send the request to (must include http:// or https://)"},
+                {"name": "method", "type": "string", "required": False, "default": "GET", "description": "The HTTP method (GET, POST, PUT, DELETE, etc.)"},
+                {"name": "headers", "type": "string", "required": False, "description": "Optional JSON string representing the HTTP headers"},
+                {"name": "data", "type": "string", "required": False, "description": "Optional payload string for methods like POST or PUT"},
+                {"name": "timeout", "type": "integer", "required": False, "default": 10, "description": "Request timeout in seconds"}
+            ],
+            "example_usage": {"url": "https://example.com", "method": "GET", "timeout": 10}
         }
     ]
 
 
 TOOLS_DICT = {
     "ping_host": 0, "nmap_scan": 1, "traceroute_host": 2, "quick_port_scan": 3,
-    "arp_scan": 4, "send_packet": 5, "hping3_probe": 6, "dns_lookup_tool": 7
+    "arp_scan": 4, "send_packet": 5, "hping3_probe": 6, "dns_lookup_tool": 7,
+    "http_request": 8
 }
 
 
@@ -292,6 +305,7 @@ def execute_tool(
         "send_packet": lambda p: {"success": True, "result": network_tools.send_packet.func(p.get("pkt_desc"), p.get("is_ethernet", False), p.get("want_response", True))},
         "hping3_probe": lambda p: {"success": True, "result": network_tools.hping3_probe.func(p.get("target"), p.get("mode", "syn"), p.get("port", 80), p.get("count", 4), p.get("flags"), p.get("arguments"))},
         "dns_lookup_tool": lambda p: {"success": True, "result": network_tools.dns_lookup_tool.func(p.get("target"), p.get("record_types", "A"), p.get("nameserver"))},
+        "http_request": lambda p: {"success": True, "result": network_tools.http_request.func(p.get("url"), p.get("method", "GET"), p.get("headers"), p.get("data"), p.get("timeout", 10))},
     }
     
     if request.tool_name not in tool_map:
@@ -358,7 +372,8 @@ def explain_tool_output(
         "arp_scan": "Local network host discovery using ARP protocol",
         "send_packet": "Custom network packet crafting and transmission using Scapy",
         "hping3_probe": "Advanced packet probing with TCP/UDP/ICMP using hping3",
-        "dns_lookup_tool": "DNS record resolution for various record types"
+        "dns_lookup_tool": "DNS record resolution for various record types",
+        "http_request": "HTTP/HTTPS request sender for API testing and web discovery"
     }
     
     # Get the LLM provider first (needed for potential summarization)

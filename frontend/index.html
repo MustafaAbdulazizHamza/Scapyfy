@@ -189,6 +189,23 @@
                     </svg>
                     <span>Tools</span>
                 </button>
+                <button class="nav-item" data-view="tasks">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 11 12 14 22 4"></polyline>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                    <span>Tasks</span>
+                </button>
+                <button class="nav-item" data-view="connections">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 12h3"></path>
+                        <path d="M19 12h3"></path>
+                        <path d="M12 2v3"></path>
+                        <path d="M12 19v3"></path>
+                        <circle cx="12" cy="12" r="7"></circle>
+                    </svg>
+                    <span>Connections</span>
+                </button>
                 <button class="nav-item admin-only hidden" data-view="admin">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -207,7 +224,7 @@
                         <option value="openai">OpenAI GPT</option>
                         <option value="gemini">Google Gemini</option>
                         <option value="claude">Anthropic Claude</option>
-                        <option value="ollama">Ollama (Local)</option>
+                        <option value="ollama">Ollama</option>
                     </select>
                     <div class="provider-status">
                         <span class="status-dot"></span>
@@ -280,7 +297,8 @@
             </div>
             <div class="sidebar-footer">
                 <div class="user-profile" id="user-profile-btn">
-                    <div class="user-avatar">
+                    <div class="user-avatar" style="position: relative; overflow: hidden;">
+                        <img id="user-avatar-img" src="" style="display: none; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; position: absolute; top: 0; left: 0;">
                         <span id="user-initial">U</span>
                     </div>
                     <div class="user-info">
@@ -325,13 +343,13 @@
                             <h3>Welcome to Scapyfy</h3>
                             <p>I'm your AI-powered packet crafting assistant. I can help you with:</p>
                             <div class="capabilities-grid">
-                                <div class="capability-card">
+                                <div class="capability-card" data-agent-prompt="Craft and send a TCP SYN packet to 192.168.1.1 on port 80" data-ask-prompt="Explain how to construct a TCP SYN packet using Scapy and show me the JSON structure">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                                     </svg>
                                     <span>Packet Crafting</span>
                                 </div>
-                                <div class="capability-card">
+                                <div class="capability-card" data-agent-prompt="Perform an ARP scan on the 192.168.1.0/24 subnet" data-ask-prompt="What is an ARP scan and how does it discover hosts on a local network?">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <circle cx="12" cy="12" r="10" />
                                         <line x1="2" y1="12" x2="22" y2="12" />
@@ -340,13 +358,13 @@
                                     </svg>
                                     <span>Network Scanning</span>
                                 </div>
-                                <div class="capability-card">
+                                <div class="capability-card" data-agent-prompt="Run a traceroute to google.com and show the hops" data-ask-prompt="Explain how traceroute works and what ICMP messages it relies on">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                                     </svg>
                                     <span>Traceroute</span>
                                 </div>
-                                <div class="capability-card">
+                                <div class="capability-card" data-agent-prompt="Scan ports 22, 80, and 443 on 192.168.1.1" data-ask-prompt="What is the difference between a stealth SYN scan and a full connect scan?">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                                         <line x1="8" y1="21" x2="16" y2="21" />
@@ -363,9 +381,18 @@
                             <textarea id="chat-input" placeholder="Describe your packet crafting task..."
                                 rows="1"></textarea>
                             <div class="chat-input-actions">
-                                <div class="iteration-control">
-                                    <label for="max-iterations">Iterations:</label>
-                                    <input type="number" id="max-iterations" value="10" min="1" max="50">
+                                <div class="controls-group" style="display: flex; flex-direction: column; gap: 4px;">
+                                    <div class="iteration-control">
+                                        <label for="chat-mode">Mode:</label>
+                                        <select id="chat-mode">
+                                            <option value="agent">Agent</option>
+                                            <option value="ask">Ask</option>
+                                        </select>
+                                    </div>
+                                    <div class="iteration-control" id="iteration-control-wrapper">
+                                        <label for="max-iterations">Iterations:</label>
+                                        <input type="number" id="max-iterations" value="10" min="1" max="50">
+                                    </div>
                                 </div>
                                 <button type="button" class="btn btn-primary btn-send" id="send-btn">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -417,12 +444,7 @@
                     <p>Execute network tools directly without LLM processing</p>
                 </div>
                 <div class="tools-content">
-                    <div class="tool-selector-container">
-                        <label for="tool-select">Select Tool:</label>
-                        <select id="tool-select" class="tool-select">
-                            <option value="">-- Choose a tool --</option>
-                        </select>
-                    </div>
+
                     <div id="tool-form-container" class="tool-form-container hidden">
                         <div class="tool-info-header">
                             <h3 id="tool-form-title">Tool Name</h3>
@@ -466,6 +488,14 @@
                         <div class="tool-output-header">
                             <h4>Output</h4>
                             <div class="tool-output-actions">
+                                <button type="button" class="btn btn-ghost btn-sm" id="export-output-btn" style="margin-right: 0.5rem;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    Export
+                                </button>
                                 <button type="button" class="btn btn-ghost btn-sm" id="copy-output-btn">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -481,49 +511,118 @@
                         <h4>Available Tools</h4>
                         <div class="tools-grid" id="tools-grid">
                             <div class="tool-card" data-tool="ping_host">
-                                <div class="tool-icon">📡</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                    </svg>
+                                </div>
                                 <h3>Ping</h3>
                                 <p>Test host reachability with ICMP echo</p>
                             </div>
                             <div class="tool-card" data-tool="nmap_scan">
-                                <div class="tool-icon">🔍</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
+                                    </svg>
+                                </div>
                                 <h3>Nmap Scanner</h3>
                                 <p>Port scanning, service detection, OS fingerprinting</p>
                             </div>
                             <div class="tool-card" data-tool="traceroute_host">
-                                <div class="tool-icon">🌐</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+                                    </svg>
+                                </div>
                                 <h3>Traceroute</h3>
                                 <p>Discover network path to target hosts</p>
                             </div>
                             <div class="tool-card" data-tool="hping3_probe">
-                                <div class="tool-icon">⚡</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                    </svg>
+                                </div>
                                 <h3>Hping3</h3>
                                 <p>Advanced packet probing and testing</p>
                             </div>
                             <div class="tool-card" data-tool="quick_port_scan">
-                                <div class="tool-icon">🚪</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                </div>
                                 <h3>Port Scanner</h3>
                                 <p>Fast Scapy-based TCP port scanning</p>
                             </div>
                             <div class="tool-card" data-tool="arp_scan">
-                                <div class="tool-icon">📋</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                    </svg>
+                                </div>
                                 <h3>ARP Scanner</h3>
                                 <p>Discover hosts on local network</p>
                             </div>
                             <div class="tool-card" data-tool="send_packet">
-                                <div class="tool-icon">📦</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                    </svg>
+                                </div>
                                 <h3>Send Packet</h3>
                                 <p>Create and send custom packets with Scapy</p>
                             </div>
                             <div class="tool-card" data-tool="dns_lookup_tool">
-                                <div class="tool-icon">🔎</div>
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </div>
                                 <h3>DNS Lookup</h3>
                                 <p>Query DNS records (A, MX, NS, TXT, etc.)</p>
+                            </div>
+                            <div class="tool-card" data-tool="http_request">
+                                <div class="tool-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                    </svg>
+                                </div>
+                                <h3>HTTP Request</h3>
+                                <p>Send HTTP/HTTPS requests and fetch responses</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            <!-- Tasks View -->
+            <div id="tasks-view" class="view">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>Scheduled Tasks</h2>
+                        <p>Manage and monitor automated tool executions and prompt sequences.</p>
+                    </div>
+                    <button class="btn btn-primary" id="new-task-btn">+ New Task</button>
+                </div>
+                <div id="tasks-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+                    <div class="loader"></div>
+                </div>
+            </div>
+
+            <!-- Connections View -->
+            <div id="connections-view" class="view">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>External Connections</h2>
+                        <p>Manage integrations with MongoDB, Elasticsearch, and Telegram.</p>
+                    </div>
+                    <button class="btn btn-primary" id="new-conn-btn">+ New Connection</button>
+                </div>
+                <div id="connections-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+                    <div class="loader"></div>
+                </div>
+            </div>
+
             <div id="admin-view" class="view">
                 <div class="view-header">
                     <h2>User Management</h2>
@@ -772,8 +871,17 @@
                 </div>
                 <div class="modal-body">
                     <div class="profile-section">
-                        <div class="profile-avatar-large">
+                        <div class="profile-avatar-large" style="position: relative; overflow: hidden; cursor: pointer;">
+                            <img id="modal-user-avatar-img" src="" alt="Avatar" style="display: none; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; position: absolute; top: 0; left: 0;">
                             <span id="modal-user-initial">U</span>
+                            <div class="avatar-upload-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); height: 30%; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 14px; height: 14px;">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                            </div>
+                            <input type="file" id="avatar-upload-input" accept="image/jpeg, image/png, image/webp" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;">
                         </div>
                         <form id="profile-update-form" class="profile-info-form" style="flex: 1;">
                             <div class="form-group">
@@ -955,7 +1063,258 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
-</body>
+    <!-- Connection Modal -->
+    <div class="modal-overlay" id="connection-modal">
+        <div class="modal glass-card">
+            <div class="modal-header">
+                <h2 id="conn-modal-title">New Connection</h2>
+                <button class="modal-close" id="close-conn-modal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="connection-form">
+                    <input type="hidden" id="conn-id">
+                    <div class="form-group">
+                        <label>Connection Name</label>
+                        <input type="text" id="conn-name" class="input-wrapper" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Connection Type</label>
+                        <div class="conn-type-grid">
+                            <div class="conn-type-card active" data-type="mongodb" onclick="ConnectionsUI.selectType('mongodb')">
+                                <span class="icon">🍃</span>
+                                <div class="info">
+                                    <strong>MongoDB</strong>
+                                    <small>NoSQL Document Store</small>
+                                </div>
+                            </div>
+                            <div class="conn-type-card" data-type="elasticsearch" onclick="ConnectionsUI.selectType('elasticsearch')">
+                                <span class="icon">🔍</span>
+                                <div class="info">
+                                    <strong>Elasticsearch</strong>
+                                    <small>Search & Analytics Engine</small>
+                                </div>
+                            </div>
+                            <div class="conn-type-card" data-type="telegram" onclick="ConnectionsUI.selectType('telegram')">
+                                <span class="icon">✈️</span>
+                                <div class="info">
+                                    <strong>Telegram Bot</strong>
+                                    <small>Push notifications via Telegram</small>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="conn-type-select" value="mongodb">
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="conn-active" checked> Active Connection
+                        </label>
+                    </div>
+                    <hr style="border-color: rgba(255,255,255,0.1); margin: 1rem 0;">
+                    <div id="conn-config-fields"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="save-conn-btn">Save Connection</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- Bot Auth Hash Modal -->
+    <div class="modal-overlay" id="auth-hash-modal">
+        <div class="modal glass-card">
+            <div class="modal-header">
+                <h2>Bot Authentication</h2>
+                <button class="modal-close" id="close-auth-modal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="auth-conn-id">
+                <button class="btn btn-primary" id="generate-hash-btn" style="margin-bottom: 1rem; width: 100%;">Generate New Auth Hash</button>
+                <div id="new-hash-display"></div>
+                <h4 style="margin: 1rem 0 0.5rem;">Existing Hashes</h4>
+                <div id="auth-hash-list" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Builder Modal -->
+    <div class="modal-overlay" id="task-modal">
+        <div class="modal glass-card" style="width: 860px; max-width: 95vw; max-height: 93vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2 id="task-modal-title">Task Builder</h2>
+                <button class="modal-close" id="close-task-modal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <!-- Tab Switcher -->
+            <div class="task-modal-tabs">
+                <button class="task-tab-btn active" data-tab="form">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                    Form Builder
+                </button>
+                <button class="task-tab-btn" data-tab="json">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    JSON Editor
+                </button>
+            </div>
+
+            <!-- Form Builder Tab -->
+            <div id="task-tab-form" class="task-tab-content active" style="overflow-y: auto; flex: 1; padding: var(--space-xl);">
+                <input type="hidden" id="task-id">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div>
+                        <div class="form-group">
+                            <label>Task Name</label>
+                            <input type="text" id="task-name" class="input-wrapper" required placeholder="e.g. Daily Port Scan">
+                        </div>
+                        <div class="form-group">
+                            <label>Description <span class="optional">(optional)</span></label>
+                            <textarea id="task-desc" class="input-wrapper" rows="2" placeholder="What does this task do?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="task-active" checked> Task Enabled
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Output Connections</label>
+                            <div id="task-outputs" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; min-height: 40px; align-content: flex-start;">
+                                <!-- populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="form-group">
+                            <label>Schedule Type</label>
+                            <select id="task-schedule-type" class="input-wrapper">
+                                <option value="once">Run Once</option>
+                                <option value="interval">Repeating Interval</option>
+                                <option value="cron">CRON Expression</option>
+                            </select>
+                        </div>
+                        <div id="sched-once" class="form-group">
+                            <label>Run At (Local Time)</label>
+                            <input type="datetime-local" id="run-at" class="input-wrapper">
+                        </div>
+                        <div id="sched-interval" class="form-group" style="display: none;">
+                            <label>Interval (Seconds)</label>
+                            <input type="number" id="interval-sec" class="input-wrapper" value="3600">
+                        </div>
+                        <div id="sched-cron" class="form-group" style="display: none;">
+                            <label>CRON Expression</label>
+                            <input type="text" id="cron-expr" class="input-wrapper" placeholder="0 * * * *">
+                            <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Minute Hour Day Month DayOfWeek</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Runs <span class="optional">(empty = unlimited)</span></label>
+                            <input type="number" id="max-runs" class="input-wrapper" placeholder="Leave empty for unlimited">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="task-steps-header">
+                    <h4>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        Task Steps
+                    </h4>
+                    <button class="btn btn-sm btn-primary" id="add-step-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Step
+                    </button>
+                </div>
+
+                <div id="task-steps-container">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+
+            <!-- JSON Editor Tab -->
+            <div id="task-tab-json" class="task-tab-content" style="display: none; flex: 1; flex-direction: column; padding: var(--space-xl);">
+                <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Edit the task definition directly as JSON. Switching back to Form Builder will attempt to parse this JSON.
+                </p>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                        <button class="btn btn-sm btn-ghost" id="task-json-format-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                            Format
+                        </button>
+                        <button class="btn btn-sm btn-ghost" id="task-json-from-form-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                            Sync from Form
+                        </button>
+                    </div>
+                    <textarea id="task-json-editor" spellcheck="false" style="
+                        flex: 1;
+                        min-height: 420px;
+                        font-family: 'Fira Mono', 'Cascadia Code', 'Consolas', monospace;
+                        font-size: 0.85rem;
+                        line-height: 1.6;
+                        padding: 1rem;
+                        background: rgba(0,0,0,0.4);
+                        border: 1px solid rgba(255,255,255,0.1);
+                        border-radius: var(--radius-md);
+                        color: var(--text-primary);
+                        resize: vertical;
+                        width: 100%;
+                        box-sizing: border-box;
+                    " placeholder='{"name": "My Task", "steps": [...], "schedule": {...}}'></textarea>
+                    <div id="task-json-error" style="color: #ff6b6b; font-size: 0.85rem; display: none;"></div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="close-task-modal-footer">Cancel</button>
+                <button class="btn btn-ghost" id="task-test-run-btn" title="Save and immediately trigger a test run" style="color: var(--accent-tertiary); border-color: var(--accent-tertiary);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
+                    Test Run
+                </button>
+                <button class="btn btn-primary" id="save-task-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Save Task
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Task Runs Modal -->
+    <div class="modal-overlay" id="task-runs-modal">
+        <div class="modal glass-card" style="width: 700px; max-width: 90vw;">
+            <div class="modal-header">
+                <h2>Execution Logs</h2>
+                <button class="modal-close" id="close-runs-modal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="task-runs-list" style="max-height: 70vh; overflow-y: auto;">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Confirm Modal -->
+    <div class="modal-overlay" id="confirm-modal" style="z-index: 10000;">
+        <div class="modal glass-card" style="width: 400px; max-width: 90vw; text-align: center;">
+            <div class="modal-header" style="justify-content: center; border-bottom: none; padding-bottom: 0;">
+                <h2 id="confirm-modal-title">Confirm Action</h2>
+            </div>
+            <div class="modal-body" style="padding-top: 1rem; padding-bottom: 2rem;">
+                <p id="confirm-modal-message" style="color: var(--text-secondary); margin: 0;"></p>
+            </div>
+            <div class="modal-footer" style="justify-content: center; gap: 1rem;">
+                <button class="btn btn-ghost" id="confirm-modal-cancel">Cancel</button>
+                <button class="btn btn-danger" id="confirm-modal-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="app.js?v=2"></script>
+    <script src="tasks_connections.js"></script>
+</body>
 </html>

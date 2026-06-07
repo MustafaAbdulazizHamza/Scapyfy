@@ -23,20 +23,34 @@ function isRootUser(user) {
     return user && user.id === 0 && user.username === 'root';
 }
 
-function loadUserSessions() {
-    if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserSessionsKey(AppState.user.id);
-        AppState.chatSessions = JSON.parse(localStorage.getItem(key) || '[]');
-    } else {
+async function loadUserSessions() {
+    try {
+        if (AppState.user && AppState.user.id !== undefined) {
+            const response = await Api.request('/messages/conversations');
+            if (response && response.conversations) {
+                AppState.chatSessions = response.conversations.map(conv => ({
+                    id: conv.conversation_id,
+                    title: conv.title || conv.conversation_id.substring(0, 20),
+                    messages: [],
+                    createdAt: conv.started_at || new Date().toISOString(),
+                    updatedAt: conv.last_message_at || new Date().toISOString(),
+                    messageCount: conv.message_count
+                }));
+            } else {
+                AppState.chatSessions = [];
+            }
+        } else {
+            AppState.chatSessions = [];
+        }
+    } catch (error) {
+        console.warn('Failed to load sessions from database:', error);
         AppState.chatSessions = [];
     }
 }
 
-function saveUserSessions() {
-    if (AppState.user && AppState.user.id !== undefined) {
-        const key = getUserSessionsKey(AppState.user.id);
-        localStorage.setItem(key, JSON.stringify(AppState.chatSessions));
-    }
+async function saveUserSessions() {
+    // Sessions are now saved automatically via /craft endpoint
+    // This function is kept for backward compatibility but does nothing
 }
 
 function createNewSession() {
@@ -52,7 +66,7 @@ function createNewSession() {
     return session;
 }
 
-function saveCurrentSession() {
+async function saveCurrentSession() {
     if (!AppState.currentSession) return;
 
     AppState.currentSession.updatedAt = new Date().toISOString();
@@ -70,21 +84,66 @@ function saveCurrentSession() {
         AppState.chatSessions = AppState.chatSessions.slice(0, 50);
     }
 
-    saveUserSessions();
+    // Sessions are now persisted automatically via /craft endpoint
+    // No need to explicitly save to database here
 }
 
-function loadSession(sessionId) {
+async function loadSession(sessionId) {
+    try {
+        // Fetch conversation history from database
+        const response = await Api.request(`/messages/conversation/history`, {
+            method: 'POST',
+            body: JSON.stringify({
+                conversation_id: sessionId,
+                limit: 1000
+            })
+        });
+        
+        if (response && response.messages) {
+            const session = AppState.chatSessions.find(s => s.id === sessionId);
+            if (session) {
+                AppState.currentSession = {
+                    id: sessionId,
+                    title: session.title,
+                    messages: response.messages
+                        .filter(msg => msg.role !== 'tool')
+                        .map(msg => ({
+                            type: msg.role === 'user' ? 'user' : 'assistant',
+                            content: msg.content,
+                            time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        })),
+                    createdAt: session.createdAt,
+                    updatedAt: session.updatedAt,
+                    messageCount: session.messageCount
+                };
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load session from database:', error);
+    }
+    
+    // Fallback to in-memory session
     const session = AppState.chatSessions.find(s => s.id === sessionId);
     if (session) {
-        AppState.currentSession = JSON.parse(JSON.stringify(session)); // Deep clone
+        AppState.currentSession = JSON.parse(JSON.stringify(session));
         return true;
     }
     return false;
 }
 
-function deleteSession(sessionId) {
+async function deleteSession(sessionId) {
+    try {
+        // Delete from database
+        await Api.request(`/messages/conversation/${sessionId}`, {
+            method: 'DELETE'
+        });
+    } catch (error) {
+        console.error('Failed to delete session from database:', error);
+    }
+    
+    // Also remove from in-memory list
     AppState.chatSessions = AppState.chatSessions.filter(s => s.id !== sessionId);
-    saveUserSessions();
     if (AppState.currentSession && AppState.currentSession.id === sessionId) {
         createNewSession();
     }
@@ -97,7 +156,7 @@ function generateSessionTitle(message) {
     return clean.length > maxLen ? clean.substring(0, maxLen) + '...' : clean;
 }
 const Router = {
-    routes: ['chat', 'history', 'tools', 'admin'],
+    routes: ['chat', 'history', 'tools', 'admin', 'tasks', 'connections'],
     init() {
         window.addEventListener('hashchange', () => this.handleRoute());
         this.handleRoute();
@@ -213,14 +272,15 @@ const Api = {
     async getStatus() {
         return await this.request('/status');
     },
-    async craft(prompt, maxIterations = 10, provider = null, memoryContext = null) {
+    async craft(prompt, maxIterations = 10, provider = null, conversationId = null, mode = "agent") {
         return await this.request('/craft', {
             method: 'POST',
             body: JSON.stringify({
                 prompt,
                 max_iterations: maxIterations,
                 provider: provider === 'auto' ? null : provider,
-                memory_context: memoryContext,
+                conversation_id: conversationId,
+                mode: mode,
             }),
         });
     },
@@ -299,6 +359,9 @@ const Api = {
 };
 const UI = {
     elements: {},
+    closeModal(modalId) {
+        document.getElementById(modalId)?.classList.remove('active');
+    },
     async init() {
         this.elements = {
             loadingScreen: document.getElementById('loading-screen'),
@@ -318,6 +381,8 @@ const UI = {
             sendBtn: document.getElementById('send-btn'),
             clearHistoryBtn: document.getElementById('clear-history-btn'),
             maxIterations: document.getElementById('max-iterations'),
+            chatMode: document.getElementById('chat-mode'),
+            iterationWrapper: document.getElementById('iteration-control-wrapper'),
             llmProvider: document.getElementById('llm-provider'),
             providerStatusText: document.getElementById('provider-status-text'),
             userProfileBtn: document.getElementById('user-profile-btn'),
@@ -388,11 +453,43 @@ const UI = {
                 Chat.send();
             }
         });
+        
+        if (this.elements.chatMode && this.elements.iterationWrapper) {
+            this.elements.chatMode.addEventListener('change', (e) => {
+                if (e.target.value === 'ask') {
+                    this.elements.iterationWrapper.style.display = 'none';
+                } else {
+                    this.elements.iterationWrapper.style.display = 'flex';
+                }
+            });
+            // Initial state
+            if (this.elements.chatMode.value === 'ask') {
+                this.elements.iterationWrapper.style.display = 'none';
+            }
+        }
         this.elements.chatInput.addEventListener('input', () => {
             this.autoResizeTextarea(this.elements.chatInput);
         });
-        this.elements.clearHistoryBtn.addEventListener('click', () => {
-            if (confirm('Clear all chat sessions? This cannot be undone.')) {
+        
+        // Handle clicks on capability cards using event delegation
+        if (this.elements.chatMessages) {
+            this.elements.chatMessages.addEventListener('click', (e) => {
+                const card = e.target.closest('.capability-card');
+                if (card) {
+                    const mode = this.elements.chatMode ? this.elements.chatMode.value : 'agent';
+                    const promptText = mode === 'ask' ? card.dataset.askPrompt : card.dataset.agentPrompt;
+                    
+                    if (promptText && this.elements.chatInput) {
+                        this.elements.chatInput.value = promptText;
+                        this.autoResizeTextarea(this.elements.chatInput);
+                        this.elements.chatInput.focus();
+                    }
+                }
+            });
+        }
+        
+        this.elements.clearHistoryBtn.addEventListener('click', async () => {
+            if (await UI.confirm('Clear Sessions', 'Clear all chat sessions? This cannot be undone.')) {
                 AppState.chatSessions = [];
                 saveUserSessions();
                 createNewSession();
@@ -423,6 +520,11 @@ const UI = {
         const profileForm = document.getElementById('profile-update-form');
         if (profileForm) {
             profileForm.addEventListener('submit', (e) => Profile.updateProfileInfo(e));
+        }
+        
+        const avatarInput = document.getElementById('avatar-upload-input');
+        if (avatarInput) {
+            avatarInput.addEventListener('change', (e) => Profile.handleAvatarSelection(e));
         }
         this.elements.logoutBtn.addEventListener('click', () => Auth.logout());
 
@@ -475,13 +577,13 @@ const UI = {
         setTimeout(() => {
             this.elements.loadingScreen.classList.add('fade-out');
         }, 800);
-        setTimeout(() => {
+        setTimeout(async () => {
             this.elements.loadingScreen.classList.add('hidden');
             if (AppState.token && AppState.user) {
-                loadUserSessions();
+                await loadUserSessions();
                 // Start fresh or continue most recent session
                 if (AppState.chatSessions.length > 0) {
-                    loadSession(AppState.chatSessions[0].id);
+                    await loadSession(AppState.chatSessions[0].id);
                     Chat.restoreSession();
                 } else {
                     createNewSession();
@@ -528,6 +630,10 @@ const UI = {
         if (viewName === 'admin' && isRootUser(AppState.user)) {
             Admin.init();
             Admin.loadUsers();
+        } else if (viewName === 'tasks') {
+            if (typeof TasksUI !== 'undefined') TasksUI.init();
+        } else if (viewName === 'connections') {
+            if (typeof ConnectionsUI !== 'undefined') ConnectionsUI.init();
         }
 
         // Handle AI Assistant visibility (Only in Tools)
@@ -548,7 +654,18 @@ const UI = {
         const initial = AppState.user.username.charAt(0).toUpperCase();
         const isAdmin = isRootUser(AppState.user);
         const role = isAdmin ? 'Root Admin' : 'User';
-        document.getElementById('user-initial').textContent = initial;
+        
+        const avatarImg = document.getElementById('user-avatar-img');
+        const initialEl = document.getElementById('user-initial');
+        if (AppState.user.avatar_data) {
+            avatarImg.src = AppState.user.avatar_data;
+            avatarImg.style.display = 'block';
+            initialEl.style.display = 'none';
+        } else {
+            avatarImg.style.display = 'none';
+            initialEl.style.display = 'block';
+            initialEl.textContent = initial;
+        }
         document.getElementById('user-display-name').textContent = AppState.user.username;
         document.getElementById('user-role').textContent = role;
         const adminNavItem = document.querySelector('.nav-item.admin-only');
@@ -566,7 +683,7 @@ const UI = {
             { value: 'openai', label: 'OpenAI GPT' },
             { value: 'gemini', label: 'Google Gemini' },
             { value: 'claude', label: 'Anthropic Claude' },
-            { value: 'ollama', label: 'Ollama (Local)' }
+            { value: 'ollama', label: 'Ollama' }
         ];
 
         try {
@@ -617,8 +734,20 @@ const UI = {
     },
     openProfileModal() {
         if (!AppState.user) return;
-        const initial = AppState.user.username.charAt(0).toUpperCase();
-        document.getElementById('modal-user-initial').textContent = initial;
+        
+        const initialEl = document.getElementById('modal-user-initial');
+        const avatarImg = document.getElementById('modal-user-avatar-img');
+        
+        initialEl.textContent = AppState.user.username.charAt(0).toUpperCase();
+        
+        if (AppState.user.avatar_data) {
+            avatarImg.src = AppState.user.avatar_data;
+            avatarImg.style.display = 'block';
+            initialEl.style.display = 'none';
+        } else {
+            avatarImg.style.display = 'none';
+            initialEl.style.display = 'block';
+        }
 
         // Populate inputs
         const uInput = document.getElementById('profile-username');
@@ -690,12 +819,12 @@ const UI = {
 
         html += AppState.chatSessions.map(session => {
             const isActive = AppState.currentSession && AppState.currentSession.id === session.id;
-            const messageCount = session.messages.length;
-            const lastMessage = session.messages[session.messages.length - 1];
-            const preview = lastMessage ? lastMessage.content.substring(0, 80) : 'No messages';
+            const messageCount = session.messages.length > 0 ? session.messages.length : (session.messageCount || 0);
+            const lastMessage = session.messages && session.messages.length > 0 ? session.messages[session.messages.length - 1] : null;
+            const preview = lastMessage ? lastMessage.content.substring(0, 80) : `${messageCount} message(s)`;
 
             return `
-                <div class="history-item ${isActive ? 'active' : ''}" data-session-id="${session.id}">
+                <div class="history-item ${isActive ? 'active' : ''}" data-session-id="${session.id}" onclick="Chat.continueChat('${session.id}')">
                     <div class="history-item-header">
                         <span class="history-item-title">${this.escapeHtml(session.title)}</span>
                         <span class="history-item-time">${this.formatTime(session.updatedAt)}</span>
@@ -703,7 +832,6 @@ const UI = {
                     <p class="history-item-preview">${this.escapeHtml(preview)}${preview.length >= 80 ? '...' : ''}</p>
                     <div class="history-item-meta">
                         <span class="history-item-count">${messageCount} messages</span>
-                        ${session.memorySummary ? '<span class="history-item-memory" title="Has memory context">🧠</span>' : ''}
                     </div>
                     <div class="history-item-actions">
                         <button class="btn btn-ghost btn-sm" onclick="Chat.continueChat('${session.id}')" title="Continue this chat">
@@ -712,7 +840,7 @@ const UI = {
                             </svg>
                             Continue
                         </button>
-                        <button class="btn btn-ghost btn-sm btn-danger-text" onclick="UI.confirmDeleteSession('${session.id}')" title="Delete this chat">
+                        <button class="btn btn-ghost btn-sm btn-danger-text" onclick="event.stopPropagation(); UI.confirmDeleteSession('${session.id}')" title="Delete this chat">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -725,12 +853,12 @@ const UI = {
 
         container.innerHTML = html;
     },
-    confirmDeleteSession(sessionId) {
+    async confirmDeleteSession(sessionId) {
         const session = AppState.chatSessions.find(s => s.id === sessionId);
         if (!session) return;
 
-        if (confirm(`Delete chat "${session.title}"? This cannot be undone.`)) {
-            deleteSession(sessionId);
+        if (await UI.confirm('Delete Chat', `Delete chat "${session.title}"? This cannot be undone.`)) {
+            await deleteSession(sessionId);
             this.renderHistory();
             UI.showToast('info', 'Chat Deleted', 'The chat session has been removed');
         }
@@ -748,6 +876,32 @@ const UI = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    },
+    confirm(title, message) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('confirm-modal');
+            const titleEl = document.getElementById('confirm-modal-title');
+            const messageEl = document.getElementById('confirm-modal-message');
+            const okBtn = document.getElementById('confirm-modal-ok');
+            const cancelBtn = document.getElementById('confirm-modal-cancel');
+            
+            titleEl.textContent = title || 'Confirm Action';
+            messageEl.textContent = message || 'Are you sure you want to proceed?';
+            
+            const cleanup = () => {
+                modal.classList.remove('active');
+                okBtn.removeEventListener('click', onOk);
+                cancelBtn.removeEventListener('click', onCancel);
+            };
+            
+            const onOk = () => { cleanup(); resolve(true); };
+            const onCancel = () => { cleanup(); resolve(false); };
+            
+            okBtn.addEventListener('click', onOk);
+            cancelBtn.addEventListener('click', onCancel);
+            
+            modal.classList.add('active');
+        });
     },
     showToast(type, title, message, duration = 5000) {
         const toast = document.createElement('div');
@@ -803,10 +957,10 @@ const Auth = {
                 localStorage.setItem('scapyfy_user', JSON.stringify(userInfo));
             } catch (e) {
             }
-            loadUserSessions();
+            await loadUserSessions();
             // Start fresh or continue most recent session
             if (AppState.chatSessions.length > 0) {
-                loadSession(AppState.chatSessions[0].id);
+                await loadSession(AppState.chatSessions[0].id);
                 Chat.restoreSession();
             } else {
                 createNewSession();
@@ -830,9 +984,9 @@ const Auth = {
             `;
         }
     },
-    logout() {
+    async logout() {
         // Save current session before logout
-        saveCurrentSession();
+        await saveCurrentSession();
 
         AppState.token = null;
         AppState.user = null;
@@ -890,6 +1044,8 @@ const Profile = {
         const username = document.getElementById('profile-username').value.trim();
         const email = document.getElementById('profile-email').value.trim();
         const messageEl = document.getElementById('profile-update-message');
+        const avatarImg = document.getElementById('modal-user-avatar-img');
+        const avatarData = avatarImg.src && avatarImg.src.startsWith('data:') ? avatarImg.src : undefined;
         const submitBtn = e.target.querySelector('button[type="submit"]');
 
         submitBtn.disabled = true;
@@ -901,7 +1057,11 @@ const Profile = {
         }
 
         try {
-            const result = await Api.updateCurrentUser({ username, email });
+            const payload = { username, email };
+            if (avatarData) {
+                payload.avatar_data = avatarData;
+            }
+            const result = await Api.updateCurrentUser(payload);
             AppState.user = result;
             localStorage.setItem('scapyfy_user', JSON.stringify(result));
             UI.updateUserInfo();
@@ -924,22 +1084,64 @@ const Profile = {
             submitBtn.textContent = 'Save Profile Info';
         }
     },
+    handleAvatarSelection(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Check size (e.g. max 500KB)
+        if (file.size > 500 * 1024) {
+            UI.showToast('error', 'File Too Large', 'Avatar must be less than 500KB');
+            e.target.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = document.getElementById('modal-user-avatar-img');
+            const initial = document.getElementById('modal-user-initial');
+            img.src = event.target.result;
+            img.style.display = 'block';
+            initial.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
 };
 const Chat = {
-    addMessage(type, content, sender = null, skipSave = false) {
+    addMessage(type, content, sender = null, skipSave = false, customTime = null) {
         const welcomeMsg = UI.elements.chatMessages.querySelector('.welcome-message');
         if (welcomeMsg) welcomeMsg.remove();
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const avatar = type === 'user' ? AppState.user?.username?.charAt(0).toUpperCase() || 'U' : '🧙‍♂️';
+        const time = customTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        let avatarHtml = type === 'user' ? AppState.user?.username?.charAt(0).toUpperCase() || 'U' : '🧙‍♂️';
+        if (type === 'user' && AppState.user && AppState.user.avatar_data) {
+            avatarHtml = `<img src="${AppState.user.avatar_data}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+        }
         const senderName = type === 'user' ? (AppState.user?.username || 'You') : 'Prof. Packet Crafter';
+        const isExportable = ['assistant', 'tool'].includes(type) && content.trim().length > 0;
+        const encodedContent = isExportable ? encodeURIComponent(JSON.stringify({ text: content })).replace(/'/g, "%27") : '';
+        const exportBtnHtml = isExportable ? `
+            <button class="btn btn-sm btn-ghost" title="Export to Connection" onclick="if(window.openExportModal) window.openExportModal('${encodedContent}', 'chat')">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+            </button>
+        ` : '';
+
         const messageEl = document.createElement('div');
         messageEl.className = `message ${type}`;
         messageEl.innerHTML = `
-            <div class="message-avatar">${avatar}</div>
+            <div class="message-avatar" style="overflow: hidden;">${avatarHtml}</div>
             <div class="message-content">
-                <div class="message-header">
-                    <span class="message-sender">${senderName}</span>
-                    <span class="message-time">${time}</span>
+                <div class="message-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span class="message-sender">${senderName}</span>
+                        <span class="message-time">${time}</span>
+                    </div>
+                    <div>
+                        ${exportBtnHtml}
+                    </div>
                 </div>
                 <div class="message-body">${this.formatMessage(content)}</div>
             </div>
@@ -988,6 +1190,9 @@ const Chat = {
         if (loadingMsg) loadingMsg.remove();
     },
     formatMessage(content) {
+        if (typeof marked !== 'undefined') {
+            return marked.parse(content);
+        }
         content = content.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
             return `<pre><code class="language-${lang}">${this.escapeHtml(code.trim())}</code></pre>`;
         });
@@ -1011,6 +1216,8 @@ const Chat = {
 
         const maxIterations = parseInt(UI.elements.maxIterations.value) || 10;
         const provider = AppState.provider;
+        const modeSelect = document.getElementById('chat-mode');
+        const mode = modeSelect ? modeSelect.value : 'agent';
 
         this.addMessage('user', prompt);
         UI.elements.chatInput.value = '';
@@ -1021,17 +1228,14 @@ const Chat = {
         this.addLoadingMessage();
 
         try {
-            // Get memory context from current session
-            const memoryContext = AppState.currentSession.memorySummary;
+            // Get conversation ID from current session
+            const conversationId = AppState.currentSession.id;
 
-            const response = await Api.craft(prompt, maxIterations, provider, memoryContext);
+            const response = await Api.craft(prompt, maxIterations, provider, conversationId, mode);
             this.removeLoadingMessage();
 
             const reportContent = response.report || 'Task completed';
             this.addMessage('assistant', reportContent);
-
-            // Update memory summary after each interaction
-            await this.updateMemorySummary();
 
         } catch (error) {
             this.removeLoadingMessage();
@@ -1053,7 +1257,7 @@ const Chat = {
             );
 
             AppState.currentSession.memorySummary = response.summary;
-            saveCurrentSession();
+            await saveCurrentSession();
         } catch (error) {
             console.error('Failed to update memory summary:', error);
             // Continue without updating summary - not critical
@@ -1066,13 +1270,13 @@ const Chat = {
                 <h3>Welcome to Scapyfy</h3>
                 <p>I'm your AI-powered packet crafting assistant. I can help you with:</p>
                 <div class="capabilities-grid">
-                    <div class="capability-card">
+                    <div class="capability-card" data-agent-prompt="Craft and send a TCP SYN packet to 192.168.1.1 on port 80" data-ask-prompt="Explain how to construct a TCP SYN packet using Scapy and show me the JSON structure">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                         </svg>
                         <span>Packet Crafting</span>
                     </div>
-                    <div class="capability-card">
+                    <div class="capability-card" data-agent-prompt="Perform an ARP scan on the 192.168.1.0/24 subnet" data-ask-prompt="What is an ARP scan and how does it discover hosts on a local network?">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
                             <line x1="2" y1="12" x2="22" y2="12"/>
@@ -1080,13 +1284,13 @@ const Chat = {
                         </svg>
                         <span>Network Scanning</span>
                     </div>
-                    <div class="capability-card">
+                    <div class="capability-card" data-agent-prompt="Run a traceroute to google.com and show the hops" data-ask-prompt="Explain how traceroute works and what ICMP messages it relies on">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                         </svg>
                         <span>Traceroute</span>
                     </div>
-                    <div class="capability-card">
+                    <div class="capability-card" data-agent-prompt="Scan ports 22, 80, and 443 on 192.168.1.1" data-ask-prompt="What is the difference between a stealth SYN scan and a full connect scan?">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
                             <line x1="8" y1="21" x2="16" y2="21"/>
@@ -1100,8 +1304,20 @@ const Chat = {
         `;
     },
     restoreSession() {
-        if (!AppState.currentSession || AppState.currentSession.messages.length === 0) {
-            this.showWelcome();
+        if (!AppState.currentSession) return false;
+
+        if (AppState.currentSession.messages.length === 0) {
+            if (AppState.currentSession.messageCount > 0) {
+                UI.elements.chatMessages.innerHTML = `
+                    <div class="welcome-message text-center">
+                        <h3 style="color: var(--danger-color);">⚠️ Decryption Failed</h3>
+                        <p>This conversation's history could not be decrypted because the server's encryption key was rotated.</p>
+                        <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9em;">You can safely delete this chat from the sidebar.</p>
+                    </div>
+                `;
+            } else {
+                this.showWelcome();
+            }
             return false;
         }
 
@@ -1109,15 +1325,15 @@ const Chat = {
 
         // Restore each message
         AppState.currentSession.messages.forEach(msg => {
-            this.addMessage(msg.type, msg.content, null, true);
+            this.addMessage(msg.type, msg.content, null, true, msg.time);
         });
 
         return true;
     },
-    startNewChat() {
+    async startNewChat() {
         // Save current session before starting new one
         if (AppState.currentSession && AppState.currentSession.messages.length > 0) {
-            saveCurrentSession();
+            await saveCurrentSession();
         }
 
         createNewSession();
@@ -1125,33 +1341,24 @@ const Chat = {
         UI.renderHistory();
         UI.switchView('chat');
     },
-    continueChat(sessionId) {
+    async continueChat(sessionId) {
         const session = AppState.chatSessions.find(s => s.id === sessionId);
 
-        // Check if session has memory context
-        if (!session || !session.memorySummary) {
-            UI.showToast('warning', 'No Context', 'This chat has no memory context. Starting a new chat instead.');
-            this.startNewChat();
+        if (!session) {
+            UI.showToast('warning', 'Session Not Found', 'This chat session could not be found.');
+            await this.startNewChat();
             return;
         }
 
         // Save current session first
         if (AppState.currentSession && AppState.currentSession.messages.length > 0) {
-            saveCurrentSession();
+            await saveCurrentSession();
         }
 
-        if (loadSession(sessionId)) {
+        if (await loadSession(sessionId)) {
             this.restoreSession();
             UI.switchView('chat');
             UI.showToast('info', 'Chat Loaded', `Continuing: ${AppState.currentSession.title}`);
-        }
-    },
-    // View a chat without continuing (for chats without memory)
-    viewChat(sessionId) {
-        if (loadSession(sessionId)) {
-            this.restoreSession();
-            UI.switchView('chat');
-            UI.showToast('info', 'Viewing Chat', 'This is a read-only view. Start a new chat to continue.');
         }
     },
 };
@@ -1349,6 +1556,28 @@ const DirectTools = {
                         <code>CAA</code> - Certificate Authority Authorization</li>
                     <li><strong>Nameserver</strong> <span class="optional-tag">Optional</span><br>
                         Custom DNS server (e.g., <code>8.8.8.8</code>, <code>1.1.1.1</code>)</li>
+                </ul>
+            `
+        },
+        'http_request': {
+            name: 'HTTP Request',
+            description: 'Send HTTP/HTTPS requests and fetch responses.',
+            icon: '🌐',
+            docs: `
+                <h5>🌐 HTTP Request</h5>
+                <p>Send an HTTP(s) request to a specified URL and get the response.</p>
+                <h6>Parameters:</h6>
+                <ul>
+                    <li><strong>URL</strong> <span class="required-tag">Required</span><br>
+                        The URL to send the request to (must include http:// or https://)</li>
+                    <li><strong>Method</strong> <span class="optional-tag">Optional</span><br>
+                        The HTTP method (GET, POST, PUT, DELETE, etc.). Default: GET</li>
+                    <li><strong>Headers</strong> <span class="optional-tag">Optional</span><br>
+                        JSON string representing the HTTP headers</li>
+                    <li><strong>Data</strong> <span class="optional-tag">Optional</span><br>
+                        Payload string for methods like POST or PUT</li>
+                    <li><strong>Timeout</strong> <span class="optional-tag">Optional</span><br>
+                        Request timeout in seconds. Default: 10</li>
                 </ul>
             `
         }
@@ -1647,37 +1876,15 @@ const DirectTools = {
         return div.innerHTML;
     },
     async init() {
-        console.log('DirectTools: Initializing...');
         try {
             this.tools = await Api.listTools();
-            console.log('DirectTools: Loaded tools:', this.tools);
-            this.populateToolSelect();
             this.bindEvents();
-            console.log('DirectTools: Initialization complete');
         } catch (error) {
             console.error('DirectTools: Failed to load tools:', error);
-            const select = document.getElementById('tool-select');
-            if (select) {
-                select.innerHTML = '<option value="">Error loading tools</option>';
-            }
         }
     },
-    populateToolSelect() {
-        const select = document.getElementById('tool-select');
-        if (!select) return;
-        select.innerHTML = '<option value="">-- Choose a tool --</option>';
-        this.tools.forEach(tool => {
-            const option = document.createElement('option');
-            option.value = tool.name;
-            option.textContent = this.getDisplayName(tool.name);
-            select.appendChild(option);
-        });
-    },
+
     bindEvents() {
-        const select = document.getElementById('tool-select');
-        if (select) {
-            select.addEventListener('change', (e) => this.onToolSelect(e.target.value));
-        }
         const form = document.getElementById('tool-execute-form');
         if (form) {
             form.addEventListener('submit', (e) => {
@@ -1689,13 +1896,25 @@ const DirectTools = {
         if (clearBtn) {
             clearBtn.addEventListener('click', () => this.clearForm());
         }
-        const loadExampleBtn = document.getElementById('load-example-btn');
-        if (loadExampleBtn) {
-            loadExampleBtn.addEventListener('click', () => this.loadExample());
-        }
+
         const copyBtn = document.getElementById('copy-output-btn');
         if (copyBtn) {
             copyBtn.addEventListener('click', () => this.copyOutput());
+        }
+        const exportBtn = document.getElementById('export-output-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const outputEl = document.getElementById('tool-output');
+                if (!outputEl || !outputEl.textContent.trim()) return UI.showToast('warning', 'No Output', 'No tool output to export.');
+                const content = {
+                    tool: this.currentTool?.name || 'unknown',
+                    params: this.lastExecutionParams || {},
+                    result: this.lastExecutionResult || outputEl.textContent
+                };
+                if(window.openExportModal) {
+                    window.openExportModal(encodeURIComponent(JSON.stringify(content)), 'tool');
+                }
+            });
         }
         const toggleDocsBtn = document.getElementById('toggle-docs-btn');
         if (toggleDocsBtn) {
@@ -1704,7 +1923,6 @@ const DirectTools = {
         document.querySelectorAll('.tool-card[data-tool]').forEach(card => {
             card.addEventListener('click', () => {
                 const toolName = card.dataset.tool;
-                document.getElementById('tool-select').value = toolName;
                 this.onToolSelect(toolName);
                 document.querySelectorAll('.tool-card').forEach(c => c.classList.remove('selected'));
                 card.classList.add('selected');
@@ -1747,13 +1965,11 @@ const DirectTools = {
         try {
             const toolInfo = await Api.getToolInfo(toolName);
             this.currentTool = toolInfo;
-            this.currentExample = toolInfo.example_usage || {};
             document.getElementById('tool-form-title').textContent =
                 this.getDisplayName(toolInfo.name);
             document.getElementById('tool-form-description').textContent =
                 this.getDisplayDescription(toolInfo.name, toolInfo.description);
             this.buildParamForm(toolInfo.parameters);
-            this.updateExampleBox();
             formContainer.classList.remove('hidden');
             outputContainer.classList.add('hidden');
             document.querySelectorAll('.tool-card').forEach(c => {
@@ -1810,7 +2026,7 @@ const DirectTools = {
                 checkLabel.textContent = param.default ? 'Enabled' : 'Disabled';
                 input.addEventListener('change', () => {
                     checkLabel.textContent = input.checked ? 'Enabled' : 'Disabled';
-                    this.updateExampleBox();
+
                 });
                 wrapper.appendChild(input);
                 wrapper.appendChild(checkLabel);
@@ -1827,7 +2043,7 @@ const DirectTools = {
                     if (val === param.default) opt.selected = true;
                     input.appendChild(opt);
                 });
-                input.addEventListener('change', () => this.updateExampleBox());
+
                 group.appendChild(label);
                 group.appendChild(input);
             } else if (param.name.includes('desc') || param.name.includes('report')) {
@@ -1838,7 +2054,7 @@ const DirectTools = {
                 if (param.default !== null && param.default !== undefined) {
                     input.value = param.default;
                 }
-                input.addEventListener('input', () => this.updateExampleBox());
+
                 group.appendChild(label);
                 group.appendChild(input);
             } else {
@@ -1853,7 +2069,7 @@ const DirectTools = {
                 if (param.required) {
                     input.required = true;
                 }
-                input.addEventListener('input', () => this.updateExampleBox());
+
                 group.appendChild(label);
                 group.appendChild(input);
             }
@@ -1930,50 +2146,7 @@ const DirectTools = {
             form.classList.remove('loading');
         }
     },
-    updateExampleBox() {
-        if (!this.currentTool) return;
-        const params = {};
-        this.currentTool.parameters.forEach(param => {
-            const input = document.getElementById(`param-${param.name}`);
-            if (!input) return;
-            let value;
-            if (param.type === 'boolean') {
-                value = input.checked;
-            } else if (param.type === 'integer') {
-                value = input.value ? parseInt(input.value, 10) : param.default;
-            } else if (param.type === 'number') {
-                value = input.value ? parseFloat(input.value) : param.default;
-            } else {
-                value = input.value || param.default || '';
-            }
-            if (value !== undefined && value !== '') {
-                params[param.name] = value;
-            }
-        });
-        const exampleBox = document.getElementById('tool-example-json');
-        if (exampleBox) {
-            exampleBox.textContent = JSON.stringify(params, null, 2);
-        }
-    },
-    loadExample() {
-        if (!this.currentExample || !this.currentTool) return;
-        this.currentTool.parameters.forEach(param => {
-            const input = document.getElementById(`param-${param.name}`);
-            if (!input) return;
-            const exampleValue = this.currentExample[param.name];
-            if (exampleValue !== undefined) {
-                if (param.type === 'boolean') {
-                    input.checked = exampleValue;
-                } else {
-                    input.value = typeof exampleValue === 'object'
-                        ? JSON.stringify(exampleValue)
-                        : exampleValue;
-                }
-            }
-        });
-        this.updateExampleBox();
-        UI.showToast('info', 'Example Loaded', 'Example parameters have been filled in');
-    },
+
     clearForm() {
         this.currentTool?.parameters.forEach(param => {
             const input = document.getElementById(`param-${param.name}`);
@@ -1986,7 +2159,7 @@ const DirectTools = {
                     : '';
             }
         });
-        this.updateExampleBox();
+
         document.getElementById('tool-output-container').classList.add('hidden');
     },
     copyOutput() {
@@ -2146,7 +2319,9 @@ const Admin = {
                     <td class="id-cell">${user.id}</td>
                     <td class="username-cell">
                         <div class="user-info-cell">
-                            <div class="user-avatar-small">${user.username.charAt(0).toUpperCase()}</div>
+                            <div class="user-avatar-small" style="overflow: hidden;">
+                                ${user.avatar_data ? `<img src="${user.avatar_data}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">` : user.username.charAt(0).toUpperCase()}
+                            </div>
                             <span>${this.escapeHtml(user.username)}</span>
                             ${isUserRoot ? '<span class="badge badge-admin">Root</span>' : ''}
                         </div>
@@ -2264,9 +2439,14 @@ const Admin = {
 
         if (isRoot) {
             usernameInput.disabled = true;
+            document.getElementById('edit-password').disabled = true;
+            document.getElementById('edit-password').placeholder = "Change from Profile Settings";
+            warning.textContent = 'Cannot change root username or password from dashboard';
             warning.classList.remove('hidden');
         } else {
             usernameInput.disabled = false;
+            document.getElementById('edit-password').disabled = false;
+            document.getElementById('edit-password').placeholder = "Leave blank to keep current";
             warning.classList.add('hidden');
         }
 
@@ -2724,8 +2904,6 @@ const AIAssistant = {
                     // Rebuild messages keeping tool markers and last 4 user/assistant messages
                     const toolMarkers = this.messages.filter(m => m.type === 'tool_switch');
                     this.messages = [...toolMarkers.slice(-3), ...lastFourMessages];
-
-                    console.log(`Summarized ${response.messages_summarized} messages`);
                 }
             } catch (error) {
                 console.warn('Failed to summarize conversation:', error);

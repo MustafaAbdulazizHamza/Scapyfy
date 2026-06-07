@@ -1,4 +1,4 @@
-# Scapyfy v2.1.0
+# Scapyfy v3.0.0
 
 ![Alt text](https://github.com/MustafaAbdulazizHamza/Scapyfy/blob/main/scapyfy.png)
 ---
@@ -8,13 +8,26 @@
 
 ## Features
 ### AI-Powered Network Tools
-- **LLM Agent** - Automated network analysis and reporting
-- **AI-assistant** - Interactive chat interface for network analysis in direct tool access mode.
+- **Dual Chat Modes**:
+  - **Agent Mode**: Autonomous LLM agent capable of chaining tools, executing deep network scans, and summarizing findings.
+  - **Ask Mode**: Direct QA interaction with the LLM without triggering automated tool execution.
+- **AI-assistant** - Interactive chat interface featuring intelligent context persistence and beautiful Markdown rendering.
+
+### Advanced Automation & Orchestration
+- **Tasks & Scheduling** - Chain LLM prompts and tools into automated workflows (Run Once, Interval, Cron).
+- **External Connections** - Seamlessly export task outputs to MongoDB, Elasticsearch, or messaging platforms.
+- **Bot Integrations** - Remote command-and-control access via Telegram and Discord bots.
+
+### Security & User Management
+- **Role-Based Access Control** - Distinct privileges for root admins and standard users.
+- **Root Protection** - Hardened security preventing unauthorized modification of the root account.
+- **Custom Avatars** - Personalized user profiles with base64-encoded custom avatars.
+
 ### Multi-LLM Support
 - **OpenAI** (GPT-3.5, GPT-4)
 - **Google Gemini** (Gemini 1.5 Flash/Pro)
 - **Anthropic Claude** (Claude 3.5 Sonnet)
-- **Ollama** (Local)
+- **Ollama**
 
 ### Network Tools
 - **Packet Crafting** (Scapy) - Custom TCP/IP/UDP/ICMP packets
@@ -24,6 +37,9 @@
 - **Hping3** - Advanced packet probing
 - **Port Scanner** - Fast Scapy-based scanning
 - **ARP Scanner** - Local network discovery
+- **DNS Lookup** - Comprehensive DNS queries (A, MX, TXT, etc.)
+- **HTTP Request** - Send custom HTTP/HTTPS requests
+
 
 ## Requirements
 

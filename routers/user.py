@@ -36,7 +36,8 @@ def create_user(
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        avatar_data=user_data.avatar_data
     )
     
     db.add(new_user)
@@ -76,6 +77,12 @@ def admin_change_password(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+    if user_id == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change root password from admin dashboard. Use the profile settings instead."
         )
 
     target_user.hashed_password = hash_password(password_data.new_password)
@@ -125,7 +132,15 @@ def admin_update_user(
 
     # Check for password change
     if user_data.password is not None:
+        if user_id == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change root password from admin dashboard. Use the profile settings instead."
+            )
         target_user.hashed_password = hash_password(user_data.password)
+        
+    if user_data.avatar_data is not None:
+        target_user.avatar_data = user_data.avatar_data
 
     db.commit()
     db.refresh(target_user)
@@ -219,6 +234,9 @@ def update_current_user(
                 detail="Email already registered"
             )
         current_user.email = user_data.email
+
+    if user_data.avatar_data is not None:
+        current_user.avatar_data = user_data.avatar_data
 
     db.commit()
     db.refresh(current_user)
