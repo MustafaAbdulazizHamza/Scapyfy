@@ -78,7 +78,7 @@ app = FastAPI(
     All endpoints require JWT Bearer token authentication.
     Use `/auth/login` to obtain a token.
     """,
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan
 )
 
@@ -165,7 +165,7 @@ async def root():
     
     return {
         "message": "🧙‍♂️ Scapyfy - AI-powered Network Security Toolkit",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "docs": "/docs",
         "redoc": "/redoc",
         "status": "running",
@@ -182,7 +182,7 @@ async def root():
 def api_info():
     return {
         "message": "🧙‍♂️ Scapyfy API",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "docs": "/docs",
         "status": "running"
     }
@@ -192,7 +192,7 @@ def api_info():
 def health_check():
     return {
         "status": "healthy",
-        "version": "2.0.0"
+        "version": "3.0.0"
     }
 
 
